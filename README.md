@@ -1,2 +1,2 @@
 # Networks
-Some tools for analyzing networks
+Some tools for analyzing functional brain networks
