@@ -6,8 +6,8 @@
 # 
 
 library(igraph) #For network functions
-library(psych) #For corr_matrix to get R's and p-values
 library(brainwaver) #For global efficiency calculation
+library(Hmisc) #For generating correlation/p-value matrices
 
 load_data <- function(csv_file){
   #   Input: CSV file name
@@ -25,9 +25,9 @@ corr_matrix <- function(df){
   #   correlations and 2) all associated un-adjusted p-values
 
 
-  corr <- corr.test(df, adjust='none')
+  corr <- rcorr(as.matrix(df), type='pearson')
   df_corr <- as.data.frame(corr['r'])
-  df_pvalue <- as.data.frame(corr['p'])
+  df_pvalue <- as.data.frame(corr['P'])
   
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
@@ -45,7 +45,7 @@ corr_matrix_threshold <- function(df, threshold=0.01){
   df_pvalue <- dfs[['pvalue']]
   
   #apply p-value threshold to correlation matrix
-  df_corr[mapply(">", df_pvalue, threshold)] <- 0
+  df_corr[mapply(">=", df_pvalue, threshold)] <- 0
   
   #remove diagonals (may not be necessary when using igraph...)
   df_corr[mapply("==", df_corr, 1)] <- 0
