@@ -17,6 +17,41 @@ load_data <- function(csv_file){
   df <- read.csv(file=csv_file, header=TRUE)
   return(df)
 }
+# Normalize Data ********************************************
+mean_not_zero <- function(x){
+  mean(x[x!=0])
+}
+
+normalize_data <- function(df, home_cage=TRUE){
+  # Input: dataframe, df, to be normalized
+  # Output: normalized dataframe where all cols with more than four 0's 
+  # are removed, and if applicable, values divided by homecage averages.
+  
+  #keep only columns of which there are less than 4 zeros
+  df <- df[, which(colSums(df==0) <4)]
+  #All values of zero converted to average of region
+  averages <- apply(df, MARGIN = 2, mean_not_zero)
+  for(i in colnames(df)){
+    df[i][df[i]==0] <- averages[i]  
+    }
+  #Normalize to home cage if available
+  if(home_cage == TRUE){
+    home <- read.csv('Python Scripts/Arc Venus/R/Homecage.csv', header = TRUE,
+                   row.names=1)
+    home_avg <- colMeans(home)
+    #drops col if homecage is 0
+    df <- df[, -which(home_avg==0)]
+    # divides every value by average
+    for(i in colnames(df,)){
+      avg <- home_avg[[i]]
+      if(avg > 0){
+        df[i] <- apply(df[1], MARGIN = 2, FUN = function(x) x/avg)
+      } 
+    }
+  }
+  return(df)
+}
+# ***********************************************************
 
 corr_matrix <- function(df){
   #   Input: Dataframe with headers as titles (brain regions)
@@ -172,4 +207,32 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE){
   return(data.frame("Transitivity" = TR_out, 
                     "Global efficiency" = GE_out,
                     row.names = c("Average", "stdev")))
+}
+
+bootstrap_measures <- function(df, iterations=500){
+  bootstrap_results <- data.frame("Largest Giant Component" = numeric(iterations),
+                                  "Global Efficiency" = numeric(iterations), 
+                                  "Transitivity" = numeric(iterations),
+                                  stringsAsFactors = FALSE)
+
+  for(i in 1:iterations){
+    new_df <- df[sample(nrow(df),replace=TRUE),]
+    df_thresh <- corr_matrix_threshold(new_df)
+    #Remove ".r" from node names
+    names(df_thresh) <- gsub("r.","",colnames(df_thresh), fixed=TRUE) 
+    #Change ... to -; for some reason when R imports "-" it turns it into "..."
+    names(df_thresh) <- gsub("...","-",colnames(df_thresh), fixed=TRUE) 
+    
+    G <- graph.adjacency(as.matrix(df_thresh), mode="undirected",
+                         weighted=TRUE)
+    
+    # Global stats of G
+    LGC <- GC_size(G)
+    GE <- Global_efficiency(G, weighted = FALSE)
+    TR <- transitivity(graph = G)
+    bootstrap_results$Largest.Giant.Component[i] <- LGC
+    bootstrap_results$Global.Efficiency[i] <- GE
+    bootstrap_results$Transitivity[i] < TR
+  }
+  return(bootstrap_results)
 }
