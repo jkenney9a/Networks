@@ -78,9 +78,9 @@ corr_matrix <- function(df){
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
 
-corr_matrix_threshold <- function(df, threshold=0.01){
+corr_matrix_threshold <- function(df, neg_Rs = FALSE, threshold=0.01){
   #   Input: Dataframe with headers as titles (brain regions) of counts etc.
-  #           p-value threshold
+  #           p-value threshold, whether or not to keep negative correlations.
   #   
   #   Output: Dataframe of correlations thresholded at p < alpha
   #   
@@ -97,18 +97,21 @@ corr_matrix_threshold <- function(df, threshold=0.01){
   df_corr[mapply("==", df_corr, 1)] <- 0
   
   #remove negative correlations
-  df_corr[mapply("<", df_corr, 0)] <- 0
+  if (neg_Rs == FALSE){
+    df_corr[mapply("<", df_corr, 0)] <- 0
+  }
+  
   
   return(df_corr)
 }
 
-CSV_to_igraph <- function(CSV_file, thresh=0.01){
+CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01){
   #Input: CSV_file of counts etc., p-value threshold
   #
   #Output: igraph graph object
   
   df <- load_data(CSV_file)
-  df_G <- corr_matrix_threshold(df,threshold=thresh)
+  df_G <- corr_matrix_threshold(df, neg_Rs = negs, threshold=thresh)
   names(df_G) <- gsub("r.","",colnames(df_G), fixed=TRUE) #Remove ".r" from node names
   
   #Change ... to -; for some reason when R imports "-" it turns it into "..."
