@@ -17,41 +17,52 @@ load_data <- function(csv_file){
   df <- read.csv(file=csv_file, header=TRUE)
   return(df)
 }
-# Normalize Data ********************************************
-mean_not_zero <- function(x){
-  mean(x[x!=0])
+
+clean_data <- function(df_count, zero_thresh=4, fill_missing=TRUE){
+  # Input: dataframe of counts to be cleaned, the maximum threshold
+  # of zero values allowed otherwise data is removed
+  #
+  # Output: dataframe of counts with columns with more zeros than 
+  # zero_threshold removed. Other zeros are interpolated.
+  
+  #Remove columns with more than zero_thresh 0's
+  df_out <- df_count[,which(colSums(df==0) < zero_thresh)]
+  #Replace zeros in data with NA to allow easier handling
+  df_out[mapply("==", df_out, 0)] <- NA
+  
+  if (fill_missing==TRUE){
+    col_avgs <- colMeans(df_out, na.rm=TRUE)
+    index <- which(is.na(df_out), arr.ind=TRUE)
+    df_out[index] <- col_avgs[index[,2]]
+  }
+  
+  return(df_out)
 }
 
-normalize_data <- function(df, home_cage=TRUE){
-  # Input: dataframe, df, to be normalized
-  # Output: normalized dataframe where all cols with more than four 0's 
-  # are removed, and if applicable, values divided by homecage averages.
+normalize_data <- function(df_data, df_norm){
+  # Input: dataframe, df, to be normalized and 
+  # dataframe to normalize to (df_norm)
+  #
+  # Output: dataframe with each column divided by the average of the 
+  # columns in df_norm. 
+  #
+  # NOTE: Inputs should already be "cleaned up" the same way using
+  # functions above. If columns are not present in both df and df_norm, 
+  # they are excluded
   
-  #keep only columns of which there are less than 4 zeros
-  df <- df[, which(colSums(df==0) <4)]
-  #All values of zero converted to average of region
-  averages <- apply(df, MARGIN = 2, mean_not_zero)
-  for(i in colnames(df)){
-    df[i][df[i]==0] <- averages[i]  
-    }
-  #Normalize to home cage if available
-  if(home_cage == TRUE){
-    home <- read.csv('Python Scripts/Arc Venus/R/Homecage.csv', header = TRUE,
-                   row.names=1)
-    home_avg <- colMeans(home)
-    #drops col if homecage is 0
-    df <- df[, -which(home_avg==0)]
-    # divides every value by average
-    for(i in colnames(df,)){
-      avg <- home_avg[[i]]
-      if(avg > 0){
-        df[i] <- apply(df[1], MARGIN = 2, FUN = function(x) x/avg)
-      } 
-    }
-  }
-  return(df)
+  #Remove columns from normalization df not in data df and vice versa:
+  df_norm <- df_norm[,which(df_norm %in% df_data)]
+  df_data <- df_data[,which(df_data %in% df_norm)]
+  
+  #Make sure columns of both dfs are in the same order:
+  df_norm <- df_norm[colnames(df_data)]
+  
+  norm_avgs <- colMeans(df_norm)
+  
+  df_out <- mapply("/", df_data, norm_avgs)
+
+  return(df_out)
 }
-# ***********************************************************
 
 corr_matrix <- function(df){
   #   Input: Dataframe with headers as titles (brain regions)
