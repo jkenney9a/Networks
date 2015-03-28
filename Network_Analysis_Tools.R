@@ -18,7 +18,7 @@ load_data <- function(csv_file){
   return(df)
 }
 
-clean_data <- function(df_count, zero_thresh=4, fill_missing=TRUE){
+clean_data <- function(df_count, zero_thresh=4, stdev=100, fill_missing=TRUE){
   # Input: dataframe of counts to be cleaned, the maximum threshold
   # of zero values allowed otherwise data is removed
   #
@@ -26,11 +26,15 @@ clean_data <- function(df_count, zero_thresh=4, fill_missing=TRUE){
   # zero_threshold removed. Other zeros are interpolated.
   
   #Remove columns with more than zero_thresh 0's
-  df_out <- df_count[,which(colSums(df==0) < zero_thresh)]
-  #Replace zeros in data with NA to allow easier handling
-  df_out[mapply("==", df_out, 0)] <- NA
+  df_out <- df_count[,which(colSums(df_count==0) < zero_thresh)]
+  #Remove columns whose standard deviations are greater than stdev
+  sd <- apply(df_out, FUN=sd, MARGIN=2)
+  keeps <- which(sd < stdev, arr.ind=TRUE)
+  df_out <- df_out[keeps]
   
   if (fill_missing==TRUE){
+    #Replace zeros in data with NA to allow easier handling
+    df_out[mapply("==", df_out, 0)] <- NA
     col_avgs <- colMeans(df_out, na.rm=TRUE)
     index <- which(is.na(df_out), arr.ind=TRUE)
     df_out[index] <- col_avgs[index[,2]]
@@ -51,8 +55,9 @@ normalize_data <- function(df_data, df_norm){
   # they are excluded
   
   #Remove columns from normalization df not in data df and vice versa:
-  df_norm <- df_norm[,which(df_norm %in% df_data)]
-  df_data <- df_data[,which(df_data %in% df_norm)]
+  common.names <- intersect(colnames(df_data), colnames(df_norm))
+  df_data <- df_data[,common.names]
+  df_norm <- df_norm[,common.names]
   
   #Make sure columns of both dfs are in the same order:
   df_norm <- df_norm[colnames(df_data)]
