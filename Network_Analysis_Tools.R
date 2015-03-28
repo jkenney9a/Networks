@@ -6,8 +6,8 @@
 # 
 
 library(igraph) #For network functions
-library(psych) #For corr_matrix to get R's and p-values
 library(brainwaver) #For global efficiency calculation
+library(Hmisc) #For generating correlation/p-value matrices
 
 load_data <- function(csv_file){
   #   Input: CSV file name
@@ -17,41 +17,59 @@ load_data <- function(csv_file){
   df <- read.csv(file=csv_file, header=TRUE)
   return(df)
 }
-# Normalize Data ********************************************
-mean_not_zero <- function(x){
-  mean(x[x!=0])
+
+clean_data <- function(df_count, zero_thresh=4, stdev=100, fill_missing=TRUE){
+  # Input: dataframe of counts to be cleaned, the maximum threshold
+  # of zero values allowed otherwise data is removed
+  #
+  # Output: dataframe of counts with columns with more zeros than 
+  # zero_threshold removed. Other zeros are interpolated.
+  
+  #Remove columns with more than zero_thresh 0's
+  df_out <- df_count[,which(colSums(df_count==0) < zero_thresh)] 
+  #Remove columns whose standard deviations are greater than stdev
+  sd <- apply(df_out, FUN=sd, MARGIN=2)
+  keeps <- which(sd < stdev, arr.ind=TRUE)
+  df_out <- df_out[keeps]
+  
+  
+  if (fill_missing==TRUE){
+    #Replace zeros in data with NA to allow easier handling
+    df_out[mapply("==", df_out, 0)] <- NA
+    col_avgs <- colMeans(df_out, na.rm=TRUE)
+    index <- which(is.na(df_out), arr.ind=TRUE)
+    df_out[index] <- col_avgs[index[,2]]
+  }
+  
+  return(df_out)
 }
 
-normalize_data <- function(df, home_cage=TRUE){
-  # Input: dataframe, df, to be normalized
-  # Output: normalized dataframe where all cols with more than four 0's 
-  # are removed, and if applicable, values divided by homecage averages.
+normalize_data <- function(df_data, df_norm){
+  # Input: dataframe, df, to be normalized and 
+  # dataframe to normalize to (df_norm)
+  #
+  # Output: dataframe with each column divided by the average of the 
+  # columns in df_norm. 
+  #
+  # NOTE: Inputs should already be "cleaned up" the same way using
+  # functions above. If columns are not present in both df and df_norm, 
+  # they are excluded
   
-  #keep only columns of which there are less than 4 zeros
-  df <- df[, which(colSums(df==0) <4)]
-  #All values of zero converted to average of region
-  averages <- apply(df, MARGIN = 2, mean_not_zero)
-  for(i in colnames(df)){
-    df[i][df[i]==0] <- averages[i]  
-    }
-  #Normalize to home cage if available
-  if(home_cage == TRUE){
-    home <- read.csv('Python Scripts/Arc Venus/R/Homecage.csv', header = TRUE,
-                   row.names=1)
-    home_avg <- colMeans(home)
-    #drops col if homecage is 0
-    df <- df[, -which(home_avg==0)]
-    # divides every value by average
-    for(i in colnames(df,)){
-      avg <- home_avg[[i]]
-      if(avg > 0){
-        df[i] <- apply(df[1], MARGIN = 2, FUN = function(x) x/avg)
-      } 
-    }
-  }
-  return(df)
+  #Remove columns from normalization df not in data df and vice versa:
+  common.names <- intersect(colnames(df_data), colnames(df_norm))
+  df_data <- df_data[,common.names]
+  df_norm <- df_norm[,common.names]
+  
+  
+  #Make sure columns of both dfs are in the same order:
+  df_norm <- df_norm[colnames(df_data)]
+  
+  norm_avgs <- colMeans(df_norm)
+  
+  df_out <- mapply("/", df_data, norm_avgs)
+
+  return(df_out)
 }
-# ***********************************************************
 
 corr_matrix <- function(df){
   #   Input: Dataframe with headers as titles (brain regions)
@@ -60,16 +78,16 @@ corr_matrix <- function(df){
   #   correlations and 2) all associated un-adjusted p-values
 
 
-  corr <- corr.test(df, adjust='none')
+  corr <- rcorr(as.matrix(df), type='pearson')
   df_corr <- as.data.frame(corr['r'])
-  df_pvalue <- as.data.frame(corr['p'])
+  df_pvalue <- as.data.frame(corr['P'])
   
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
 
-corr_matrix_threshold <- function(df, threshold=0.01){
+corr_matrix_threshold <- function(df, neg_Rs = FALSE, threshold=0.01){
   #   Input: Dataframe with headers as titles (brain regions) of counts etc.
-  #           p-value threshold
+  #           p-value threshold, whether or not to keep negative correlations.
   #   
   #   Output: Dataframe of correlations thresholded at p < alpha
   #   
@@ -80,24 +98,27 @@ corr_matrix_threshold <- function(df, threshold=0.01){
   df_pvalue <- dfs[['pvalue']]
   
   #apply p-value threshold to correlation matrix
-  df_corr[mapply(">", df_pvalue, threshold)] <- 0
+  df_corr[mapply(">=", df_pvalue, threshold)] <- 0
   
   #remove diagonals (may not be necessary when using igraph...)
   df_corr[mapply("==", df_corr, 1)] <- 0
   
   #remove negative correlations
-  df_corr[mapply("<", df_corr, 0)] <- 0
+  if (neg_Rs == FALSE){
+    df_corr[mapply("<", df_corr, 0)] <- 0
+  }
+  
   
   return(df_corr)
 }
 
-CSV_to_igraph <- function(CSV_file, thresh=0.01){
+CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01){
   #Input: CSV_file of counts etc., p-value threshold
   #
   #Output: igraph graph object
   
   df <- load_data(CSV_file)
-  df_G <- corr_matrix_threshold(df,threshold=thresh)
+  df_G <- corr_matrix_threshold(df, neg_Rs = negs, threshold=thresh)
   names(df_G) <- gsub("r.","",colnames(df_G), fixed=TRUE) #Remove ".r" from node names
   
   #Change ... to -; for some reason when R imports "-" it turns it into "..."
