@@ -8,6 +8,7 @@
 library(igraph) #For network functions
 library(brainwaver) #For global efficiency calculation
 library(Hmisc) #For generating correlation/p-value matrices
+library(boot) #For bootstrapping
 
 load_data <- function(csv_file){
   #   Input: CSV file name
@@ -33,7 +34,9 @@ clean_data <- function(df_count, missing_thresh=4, fill_missing=TRUE){
   
   #Remove columns whose standard deviations are greater than stdev
   #Commented this out for now b/c I don't think it's appropriate to put 
-  #this here. Perhaps in a "data testing" funciton? - JWK
+  #this here. Perhaps in a "data testing" funciton? Also need to discuss
+  #the most appropriate parameter for this; I don't think stdev works b/c of 
+  #differences in count numbers in different regions - JWK
   #
 #   sd <- apply(df_out, FUN=sd, MARGIN=2, na.rm=TRUE)
 #   keeps <- which(sd < stdev, arr.ind=TRUE)
@@ -89,7 +92,7 @@ corr_matrix <- function(df){
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
 
-corr_matrix_threshold <- function(df, neg_Rs = FALSE, threshold=0.01){
+corr_matrix_threshold <- function(df, neg_Rs = FALSE, p_threshold=0.01){
   #   Input: Dataframe with headers as titles (brain regions) of counts etc.
   #           p-value threshold, whether or not to keep negative correlations.
   #   
@@ -102,10 +105,13 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, threshold=0.01){
   df_pvalue <- dfs[['pvalue']]
   
   #apply p-value threshold to correlation matrix
-  df_corr[mapply(">=", df_pvalue, threshold)] <- 0
+  df_corr[mapply(">=", df_pvalue, p_threshold)] <- 0
   
   #remove diagonals (may not be necessary when using igraph...)
   df_corr[mapply("==", df_corr, 1)] <- 0
+  
+  #remove any NaNs, infs or NAs (sometimes happens with bootstrapping; not sure why)
+  df_corr[mapply(is.infinite, df_corr)] <- 0
   
   #remove negative correlations
   if (neg_Rs == FALSE){
@@ -116,19 +122,32 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, threshold=0.01){
   return(df_corr)
 }
 
-CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01){
+CSV_to_igraph <- function(CSV_file, negs = FALSE, p_thresh=0.01){
   #Input: CSV_file of counts etc., p-value threshold
   #
   #Output: igraph graph object
   
   df <- load_data(CSV_file)
-  df_G <- corr_matrix_threshold(df, neg_Rs = negs, threshold=thresh)
+  df_G <- corr_matrix_threshold(df, neg_Rs = negs, p_threshold=p_thresh)
   names(df_G) <- gsub("r.","",colnames(df_G), fixed=TRUE) #Remove ".r" from node names
   
   #Change ... to -; for some reason when R imports "-" it turns it into "..."
   names(df_G) <- gsub("...","-",colnames(df_G), fixed=TRUE) 
   
   G <- graph.adjacency(as.matrix(df_G), mode="undirected",
+                       weighted=TRUE)
+  
+  return(G)
+}
+
+df_to_igraph <- function(df, negs=FALSE, p_thresh=0.01){
+  #Input: df of counts per brain region, whether to keep negative
+  #correlations and the p-value threshold
+  #
+  #Output: igraph graph
+  
+  df_G <- corr_matrix_threshold(df, neg_Rs = negs, p_threshold=p_thresh)
+  G <- graph.adjacency(as.matrix(df_G), mode="undirected", 
                        weighted=TRUE)
   
   return(G)
@@ -234,30 +253,55 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE){
                     row.names = c("Average", "stdev")))
 }
 
-bootstrap_measures <- function(df, iterations=500){
-  bootstrap_results <- data.frame("Largest Giant Component" = numeric(iterations),
-                                  "Global Efficiency" = numeric(iterations), 
-                                  "Transitivity" = numeric(iterations),
-                                  stringsAsFactors = FALSE)
+boot_function <- function(df, indices, p_thresh=0.01){
+  df_boot <- df[indices,]
+  df_thresh <- corr_matrix_threshold(df_boot, p_threshold=p_thresh)
+  G <- graph.adjacency(as.matrix(df_thresh), mode="undirected",
+                       weighted=TRUE)
+  
+  GC <- GC_size(G)
+  GE <- Global_efficiency(G, weighted=TRUE)
+  Trans <- transitivity(G, type="global")
+  
+  return(c(GC, GE, Trans))
+}
 
-  for(i in 1:iterations){
-    new_df <- df[sample(nrow(df),replace=TRUE),]
-    df_thresh <- corr_matrix_threshold(new_df)
-    #Remove ".r" from node names
-    names(df_thresh) <- gsub("r.","",colnames(df_thresh), fixed=TRUE) 
-    #Change ... to -; for some reason when R imports "-" it turns it into "..."
-    names(df_thresh) <- gsub("...","-",colnames(df_thresh), fixed=TRUE) 
-    
-    G <- graph.adjacency(as.matrix(df_thresh), mode="undirected",
-                         weighted=TRUE)
-    
-    # Global stats of G
-    LGC <- GC_size(G)
-    GE <- Global_efficiency(G, weighted = FALSE)
-    TR <- transitivity(graph = G)
-    bootstrap_results$Largest.Giant.Component[i] <- LGC
-    bootstrap_results$Global.Efficiency[i] <- GE
-    bootstrap_results$Transitivity[i] < TR
-  }
-  return(bootstrap_results)
+bootstrap_measures <- function(df, iterations=500, thresh=0.01, conf_interval=0.95){
+  #Input: dataframe of counts (noramlized/cleaned), number of iterations
+  #for bootstrapping and p-value for tresholding network, and confidence interval
+  #
+  #Output: Bootstrap object
+  
+  return(boot(data=df, statistic=boot_function, R=iterations, p_thresh=thresh))
+  
+  
+#   GC <- numeric(iterations)
+#   GE <- numeric(iterations)
+#   Trans <- numeric(iterations)
+#   
+#   for(i in 1:iterations){
+#     new_df <- df[sample(nrow(df),replace=TRUE),]
+#     df_thresh <- corr_matrix_threshold(new_df, p_threshold=p_thresh)
+#     
+#     #Generate graph
+#     G <- graph.adjacency(as.matrix(df_thresh), mode="undirected",
+#                          weighted=TRUE)
+#     
+#     # Global stats of G
+#     GC[i] <- GC_size(G)
+#     GE[i] <- Global_efficiency(G, weighted = TRUE)
+#     Trans[i] <- transitivity(G, type="global")
+# 
+#   }
+#   
+#   #Calculate mean and confidence intervals for each statistics
+#   GC_out <- c(mean(GC), t.test(GC, conf.level=conf_interval)$conf.int[2:1])
+#   GE_out <- c(mean(GE), t.test(GE, conf.level=conf_interval)$conf.int[2:1])
+#   Trans_out <- c(mean(Trans), t.test(Trans, conf.level=conf_interval)$conf.int[2:1])
+#   
+#   row_names <- c("Measure", paste("+", conf_interval), paste("-", conf_interval))
+#   
+#   bootstrap_results <- data.frame("Largest GC"= GC_out, "Global Efficiency"= GE_out,
+#                                   "Transitivity(clustering)"= Trans_out, row.names=row_names)
+#   return(bootstrap_results)
 }
