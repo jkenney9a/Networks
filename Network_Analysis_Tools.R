@@ -18,23 +18,28 @@ load_data <- function(csv_file){
   return(df)
 }
 
-clean_data <- function(df_count, zero_thresh=4, stdev=100, fill_missing=TRUE){
+clean_data <- function(df_count, missing_thresh=4, fill_missing=TRUE){
   # Input: dataframe of counts to be cleaned, the maximum threshold
-  # of zero values allowed otherwise data is removed
+  # of missing values allowed otherwise data is removed
   #
   # Output: dataframe of counts with columns with more zeros than 
-  # zero_threshold removed. Other zeros are interpolated.
+  # zero_threshold removed. Other zeros are replaced with column mean.
   
-  #Remove columns with more than zero_thresh 0's
-  df_out <- df_count[,which(colSums(df_count==0) < zero_thresh)]
+  #Replace zeros in data with NA to allow easier handling
+  df_count[mapply("==", df_count, 0)] <- NA
+  
+  #Remove columns with more than missing_thresh missing values
+  df_out <- df_count[,which(colSums(is.na(df_count)) < missing_thresh)]
+  
   #Remove columns whose standard deviations are greater than stdev
-  sd <- apply(df_out, FUN=sd, MARGIN=2)
-  keeps <- which(sd < stdev, arr.ind=TRUE)
-  df_out <- df_out[keeps]
+  #Commented this out for now b/c I don't think it's appropriate to put 
+  #this here. Perhaps in a "data testing" funciton? - JWK
+  #
+#   sd <- apply(df_out, FUN=sd, MARGIN=2, na.rm=TRUE)
+#   keeps <- which(sd < stdev, arr.ind=TRUE)
+#   df_out <- df_out[keeps]
   
   if (fill_missing==TRUE){
-    #Replace zeros in data with NA to allow easier handling
-    df_out[mapply("==", df_out, 0)] <- NA
     col_avgs <- colMeans(df_out, na.rm=TRUE)
     index <- which(is.na(df_out), arr.ind=TRUE)
     df_out[index] <- col_avgs[index[,2]]
@@ -68,6 +73,7 @@ normalize_data <- function(df_data, df_norm){
 
   return(df_out)
 }
+
 
 corr_matrix <- function(df){
   #   Input: Dataframe with headers as titles (brain regions)
