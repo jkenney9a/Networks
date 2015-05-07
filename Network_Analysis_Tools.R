@@ -31,17 +31,7 @@ clean_data <- function(df_count, missing_thresh=4, fill_missing=TRUE){
   
   #Remove columns with more than missing_thresh missing values
   df_out <- df_count[,which(colSums(is.na(df_count)) < missing_thresh)]
-  
-  #Remove columns whose standard deviations are greater than stdev
-  #Commented this out for now b/c I don't think it's appropriate to put 
-  #this here. Perhaps in a "data testing" funciton? Also need to discuss
-  #the most appropriate parameter for this; I don't think stdev works b/c of 
-  #differences in count numbers in different regions - JWK
-  #
-#   sd <- apply(df_out, FUN=sd, MARGIN=2, na.rm=TRUE)
-#   keeps <- which(sd < stdev, arr.ind=TRUE)
-#   df_out <- df_out[keeps]
-  
+    
   if (fill_missing==TRUE){
     col_avgs <- colMeans(df_out, na.rm=TRUE)
     index <- which(is.na(df_out), arr.ind=TRUE)
@@ -208,7 +198,8 @@ Global_efficiency <- function(G, weighted=TRUE){
 
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE){
   #Input: igraph graph, wehther or not random graphs should have
-  #same degree distribution as input graph.
+  #same degree distribution as input graph. If degree_dist=FALSE
+  #uses Erdos-Renyi random graph
   #
   #Output: Equivalent random graph statistics and stdev in a df:
   #Transitivity (very closely related to clustering coefficient)
@@ -235,8 +226,8 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE){
     } else{
   
   if(degree_dist == FALSE){
-    n <- length(vertex.attributes(G)[[1]]) #number of nodes
-    m <- length(edge.attributes(G)[[1]]) #number of edges
+    n <- vcount(G) #number of nodes
+    m <- ecount(G) #number of edges
     for(i in 1:iterations){
       RG <- erdos.renyi.game(n, m, type="gnm")
       TR <- append(TR, transitivity(RG, type="global"))
@@ -253,17 +244,73 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE){
                     row.names = c("Average", "stdev")))
 }
 
+Watts_Strogatz_model <- function(G, iterations=100, trans_match_iter=100){
+  #Input: A graph to use as basis for generating Watts-Strogatz small 
+  # world model. Number of random Watts-Strogatz graphs to calculate and
+  #the number of iterations to use for matching transitivity/clustering
+  #coefficient
+  #
+  #Output: Random graph statistics and stdev in a df:
+  #Transitivity (i.e., clustering coefficient)
+  #Global efficiency
+  #
+  #NOTE: wiring probability for graph is set such that the clustering 
+  #coefficient of the Watts-Strogatz graphs are approximately the same
+  #as the input graph.
+  
+  n <- vcount(G) #number of nodes
+  e <- ecount(G) #number of edges
+  G.trans <- transitivity(G, type="global")
+  
+  nei <- round(e/n) #Calculate number of edges in each node neighborhood
+                    #this measure attempts to get as close to the number of 
+                    #edges as possible to the original graph, but unlikely to be exact
+  
+  wiring.ps <- seq(0,1,0.01) #generate re-wiring probabilities to test
+  
+  #Data frame to hold transitivity/clustering values 
+  trans.out <- as.data.frame(matrix(NA, ncol=length(wiring.ps), nrow=iterations, 
+                                    dimnames=list(1:trans_match_iter, wiring.ps)))
+  
+  #Generate a series of Watts-Strogatz graphs
+  for(i in 1:trans_match_iter){
+    trans.out[i,] <- sapply(wiring.ps, function(x) 
+                            transitivity(watts.strogatz.game(1,n,nei,x), type="global"))
+  }
+  
+  trans.out.means <- colMeans(trans.out)
+  p.value <- wiring.ps[which(abs(trans.out.means-G.trans) == min(abs(trans.out.means-G.trans)))]
+  
+  TR <- c()
+  GE <- c()
+  
+  for(i in 1:iterations){
+    W <- watts.strogatz.game(1,n,nei,p.value)
+    TR <- append(TR, transitivity(W, type="global"))
+    GE <- append(GE, Global_efficiency(W, weighted=FALSE))
+  }
+  
+  TR_out <- c(mean(TR), sd(TR))
+  GE_out <- c(mean(GE), sd(GE))
+  
+  return (data.frame("Transitivity" = TR_out, "Global efficiency" = GE_out, 
+                    row.names=c("Average", "stdev")))
+  
+}
+
 boot_function <- function(df, indices, p_thresh=0.01){
   df_boot <- df[indices,]
-  df_thresh <- corr_matrix_threshold(df_boot, p_threshold=p_thresh)
+  df_thresh <- corr_matrix_threshold(df_boot, p_threshold=p_thresh, neg_Rs=FALSE)
   G <- graph.adjacency(as.matrix(df_thresh), mode="undirected",
                        weighted=TRUE)
   
+  G <- decompose.graph(G)[[1]]
   GC <- GC_size(G)
-  GE <- Global_efficiency(G, weighted=TRUE)
+  GE <- Global_efficiency(G, weighted=FALSE)
   Trans <- transitivity(G, type="global")
+  edges <- length(E(G))
   
-  return(c(GC, GE, Trans))
+  return(c(GC, GE, Trans, edges))
 }
 
 bootstrap_measures <- function(df, iterations=500, thresh=0.01, conf_interval=0.95){
@@ -275,33 +322,5 @@ bootstrap_measures <- function(df, iterations=500, thresh=0.01, conf_interval=0.
   return(boot(data=df, statistic=boot_function, R=iterations, p_thresh=thresh))
   
   
-#   GC <- numeric(iterations)
-#   GE <- numeric(iterations)
-#   Trans <- numeric(iterations)
-#   
-#   for(i in 1:iterations){
-#     new_df <- df[sample(nrow(df),replace=TRUE),]
-#     df_thresh <- corr_matrix_threshold(new_df, p_threshold=p_thresh)
-#     
-#     #Generate graph
-#     G <- graph.adjacency(as.matrix(df_thresh), mode="undirected",
-#                          weighted=TRUE)
-#     
-#     # Global stats of G
-#     GC[i] <- GC_size(G)
-#     GE[i] <- Global_efficiency(G, weighted = TRUE)
-#     Trans[i] <- transitivity(G, type="global")
-# 
-#   }
-#   
-#   #Calculate mean and confidence intervals for each statistics
-#   GC_out <- c(mean(GC), t.test(GC, conf.level=conf_interval)$conf.int[2:1])
-#   GE_out <- c(mean(GE), t.test(GE, conf.level=conf_interval)$conf.int[2:1])
-#   Trans_out <- c(mean(Trans), t.test(Trans, conf.level=conf_interval)$conf.int[2:1])
-#   
-#   row_names <- c("Measure", paste("+", conf_interval), paste("-", conf_interval))
-#   
-#   bootstrap_results <- data.frame("Largest GC"= GC_out, "Global Efficiency"= GE_out,
-#                                   "Transitivity(clustering)"= Trans_out, row.names=row_names)
-#   return(bootstrap_results)
 }
+
