@@ -250,9 +250,10 @@ Watts_Strogatz_model <- function(G, iterations=100, trans_match_iter=100){
   #the number of iterations to use for matching transitivity/clustering
   #coefficient
   #
-  #Output: Random graph statistics and stdev in a df:
-  #Transitivity (i.e., clustering coefficient)
-  #Global efficiency
+  #Output: List containing three items:
+  # 1) Random graph statistics and stdev in a df for transitivity and global efficiency
+  # 2) The average sorted degree distribution for all the WS graphs generated
+  # 3) The average sorted clustering distribution for all the WS graphs generated
   #
   #NOTE: wiring probability for graph is set such that the clustering 
   #coefficient of the Watts-Strogatz graphs are approximately the same
@@ -272,29 +273,100 @@ Watts_Strogatz_model <- function(G, iterations=100, trans_match_iter=100){
   trans.out <- as.data.frame(matrix(NA, ncol=length(wiring.ps), nrow=iterations, 
                                     dimnames=list(1:trans_match_iter, wiring.ps)))
   
-  #Generate a series of Watts-Strogatz graphs
+  #Generate a series of Watts-Strogatz graphs to find out what p-value matches the 
+  #transitivity/clustering in the original graph
   for(i in 1:trans_match_iter){
     trans.out[i,] <- sapply(wiring.ps, function(x) 
                             transitivity(watts.strogatz.game(1,n,nei,x), type="global"))
   }
   
+  #Get the p-value associated with the graph matching clustering/transitivity of original graph
   trans.out.means <- colMeans(trans.out)
   p.value <- wiring.ps[which(abs(trans.out.means-G.trans) == min(abs(trans.out.means-G.trans)))]
   
-  TR <- c()
-  GE <- c()
+  TR <- c()     #Vector to hold transitivity calculations
+  GE <- c()     #Vector to hold global efficiency calculations
+  deg.dist <- as.data.frame(matrix(NA, ncol=n, nrow=iterations))
+  clust.dist <- as.data.frame(matrix(NA, ncol=n, nrow=iterations))
   
+  #Generate many graphs
   for(i in 1:iterations){
     W <- watts.strogatz.game(1,n,nei,p.value)
     TR <- append(TR, transitivity(W, type="global"))
     GE <- append(GE, Global_efficiency(W, weighted=FALSE))
+    
+    deg.dist[i,] <- sort(degree(W))
+    clust.dist[i,] <- sort(transitivity(W, type="local"))
   }
+  
+  deg.dist <- colMeans(deg.dist)
+  clust.dist <- colMeans(clust.dist)
   
   TR_out <- c(mean(TR), sd(TR))
   GE_out <- c(mean(GE), sd(GE))
+  df_out <- data.frame("Transitivity" = TR_out, "Global efficiency" = GE_out, row.names=c("Average", "stdev"))
+
+  return (list(df_out, deg.dist, clust.dist))
   
-  return (data.frame("Transitivity" = TR_out, "Global efficiency" = GE_out, 
-                    row.names=c("Average", "stdev")))
+}
+
+BA_model <- function(G, iterations){
+  #
+  # Generate Barabasi-Alberts scale free models based on the input graph G
+  #
+  # Input: graph G of interest and the number of iterations of BA model
+  # to generate
+  #
+  # Output: List containing three items:
+  # 1) Random graph statistics and stdev in a df for transitivity and global efficiency
+  # 2) The average sorted degree distribution for all the WS graphs generated
+  # 3) The average sorted clustering distribution for all the WS graphs generated
+  #
+  #NOTE: BA graphs are attempted to be matched to total edge number of input graph
+  # also assumes undirected graph
+  
+  n <- vcount(G)
+  e <- ecount(G)
+  G.density <- e / (((n*(n-1))/2))
+  nei <- round(e/n) #get approximate number for edges to add per iteration of BA algorithm (m)
+  
+  nei.out <- 0
+  BA.test <- e
+  
+  # Select nei/m input for BA model that yields closest match to number of edges of input graph
+  for(i in 1:(nei+2)){
+    BA.temp <- barabasi.game(n, m=i, directed=FALSE)
+    temp <- abs(e - ecount(BA.temp))
+    print(temp)
+    if(temp < BA.test){
+      nei.out <- i
+      BA.test <- temp
+    }
+  }
+  
+  TR <- c()     #Vector to hold transitivity calculations
+  GE <- c()     #Vector to hold global efficiency calculations
+  deg.dist <- as.data.frame(matrix(NA, ncol=n, nrow=iterations))
+  clust.dist <- as.data.frame(matrix(NA, ncol=n, nrow=iterations))
+  
+  #Generate many graphs
+  for(i in 1:iterations){
+    BA <- barabasi.game(n, m=nei.out, directed=FALSE)
+    TR <- append(TR, transitivity(BA, type="global"))
+    GE <- append(GE, Global_efficiency(BA, weighted=FALSE))
+    
+    deg.dist[i,] <- sort(degree(BA))
+    clust.dist[i,] <- sort(transitivity(BA, type="local"))
+  }
+  
+  deg.dist <- colMeans(deg.dist)
+  clust.dist <- colMeans(clust.dist)
+  
+  TR_out <- c(mean(TR), sd(TR))
+  GE_out <- c(mean(GE), sd(GE))
+  df_out <- data.frame("Transitivity" = TR_out, "Global efficiency" = GE_out, row.names=c("Average", "stdev"))
+  
+  return (list(df_out, deg.dist, clust.dist))
   
 }
 
@@ -324,3 +396,30 @@ bootstrap_measures <- function(df, iterations=500, thresh=0.01, conf_interval=0.
   
 }
 
+#   if(plots==TRUE){
+#     #Degree distribution plots:
+#     h.G.deg <- hist(degree(G), breaks=seq(from=min(degree(G))-0.5, to=max(degree(G))+0.5, by=1), plot=FALSE)
+#     h.G.deg$counts <- h.G.deg$counts/sum(h.G.deg$counts) #Recalculate as probability distribution
+#     
+#     h.WS.deg <- hist(deg.dist, breaks=seq(from=floor(min(deg.dist))-0.5, to=ceiling(max(deg.dist))+0.5, by=1), plot=FALSE)
+#     mx.h.WS.deg <- max(h.WS.deg$counts / sum(h.WS.deg$counts))
+#                       
+#     plot(h.G.deg, ylim=c(0,max(c(max(h.G.deg$counts, mx.h.WS.deg)))))
+#     d.deg.dist <- density(deg.dist, na.rm=TRUE, from=min(degree(G), to=max(degree(G))))
+#     d.deg.dist$y <- d.deg.dist$y / mx.h.WS.deg
+#     lines(d.deg.dist)
+#     
+#     #Clustering distribution plots:
+#     G.trans <- transitivity(G, type="local")
+#     h.G.clust <- hist(G.trans, breaks=seq(from=0, to=1, by=0.05), plot=FALSE)
+#     h.G.clust$counts <- h.G.clust$counts / sum(h.G.clust$counts)
+# 
+#     h.WS.clust <- hist(clust.dist, breaks=seq(from=0, to=1, by=0.05), plot=FALSE)
+#     mx.h.WS.clust <- max(h.WS.clust$counts / sum(h.WS.clust$counts))
+# 
+#     plot(h.G.clust, ylim=c(0,max(c(max(h.G.clust$counts, mx.h.WS.clust)))))
+#     d.clust.dist <- density(clust.dist, na.rm=TRUE, from=0, to=1)
+#     d.clust.dist$y <- d.clust.dist$y / max(h.WS.clust$counts)
+#     lines(d.clust.dist)
+# 
+#   }
