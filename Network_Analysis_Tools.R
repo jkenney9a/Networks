@@ -10,6 +10,7 @@ library(brainwaver) #For global efficiency calculation
 library(Hmisc) #For generating correlation/p-value matrices
 library(boot) #For bootstrapping
 
+
 load_data <- function(csv_file){
   #   Input: CSV file name
   #   
@@ -79,6 +80,12 @@ corr_matrix <- function(df){
   df_corr <- as.data.frame(corr['r'])
   df_pvalue <- as.data.frame(corr['P'])
   
+  names(df_corr) <- gsub("r.","",colnames(df_corr), fixed=TRUE) #Remove ".r" from node names
+  
+  #Change ... to -; for some reason when R imports "-" it turns it into "..."
+  names(df_corr) <- gsub("...","-",colnames(df_corr), fixed=TRUE)
+  rownames(df_corr) <- gsub("...", "-", rownames(df_corr), fixed=TRUE)
+  
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
 
@@ -119,10 +126,6 @@ CSV_to_igraph <- function(CSV_file, negs = FALSE, p_thresh=0.01){
   
   df <- load_data(CSV_file)
   df_G <- corr_matrix_threshold(df, neg_Rs = negs, p_threshold=p_thresh)
-  names(df_G) <- gsub("r.","",colnames(df_G), fixed=TRUE) #Remove ".r" from node names
-  
-  #Change ... to -; for some reason when R imports "-" it turns it into "..."
-  names(df_G) <- gsub("...","-",colnames(df_G), fixed=TRUE) 
   
   G <- graph.adjacency(as.matrix(df_G), mode="undirected",
                        weighted=TRUE)
@@ -175,6 +178,12 @@ GC_size <- function(G){
   #Output: size of giant component
   
   return(max(clusters(G)[[2]]))
+}
+
+get_GC <- function(G){
+  clust <- clusters(G)
+  GC <- induced.subgraph(G, which(clust$membership == which.max(clust$csize)))
+  return(GC)
 }
 
 Global_efficiency <- function(G, weighted=TRUE){
@@ -395,6 +404,13 @@ bootstrap_measures <- function(df, iterations=500, thresh=0.01, conf_interval=0.
   
   
 }
+
+
+  
+  
+  
+  
+
 
 #   if(plots==TRUE){
 #     #Degree distribution plots:
