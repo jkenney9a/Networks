@@ -29,14 +29,14 @@ xml.to.igraph <- function(xml.file){
   
   #Tidy up the xml structures so can be put in a dataframe
   ids <- unlist(xmlApply(ids, xmlValue))
-  #ids <- unlist(lapply(ids, as.numeric)) #Turn ids to numbers in a vector
 
   parents <- unlist(xmlApply(parents, xmlValue))
-  #parents <- unlist(lapply(parents, as.numeric)) #Turn parent ids to numbers in vector
   
-  names <- unlist(xmlApply(names, xmlValue))
+  names <- unlist(xmlApply(names, xmlValue)) #Turn into a vector
+  names <- gsub('\"', '', names) #Remove some XML formatting
   
   acronyms <- unlist(xmlApply(acronyms, xmlValue))
+  acronyms <- gsub('\"', '', acronyms) #Remove some XML formatting
   
   #Map ids to acronyms
   id.acronyms <- acronyms
@@ -55,4 +55,34 @@ xml.to.igraph <- function(xml.file){
   
   return(G)  
 }
+
+get.coarse.ontology <- function(ontology.graph, nodes, coarseness){
+  #
+  # Input: Ontology graph, a vector of nodes (that should be in the ontology graph)
+  # and a vector of the level of coarseness in which to label each node (e.g, 
+  # "hippocampus", "cortex" etc.). The coarseness level must correspond to a part
+  # of the ontology graph and right now must be the node acronym
+  #
+  # Output: A dataframe consiting of the nodes and their associated ontology level
+  # from the coarseness vector
+  
+  node.mapping <- data.frame("node"=nodes, "ont.mapping"=NA)
+  ont.diameter <- diameter(ontology.graph)
+  
+  for (C.level in coarseness){
+    
+    #Get neighborhood of nodes for coarseness level that go into that node
+    hood <- graph.neighborhood(ontology.graph, order=ont.diameter, nodes=C.level, mode='in')
+    hood.acronym <- V(hood[[1]])$name #Get a list of node names in 'hood
+    hood.full.name <- V(hood[[1]])$full.name #Get list of full names in 'hood
+    hood <- c(hood.acronym, hood.full.name) #Can use either node acronyms or full names
+    
+    #Compare nodes in input list to neighborhood and alter ont.mapping accordingly
+    node.mapping$ont.mapping[is.element(nodes,hood)] <- C.level
+        
+  }
+  
+  return(node.mapping)
+}
+
 
