@@ -334,7 +334,7 @@ BA_model <- function(G, iterations){
   # NOTE: BA graphs are generated such that the average edges from the BA graphs that are closest to
   # the input graph is approximately equal to the input graph. The number of iterations used for each
   # BA graph is scaled to generate this result.
-  
+  s
   n <- vcount(G)
   e <- ecount(G)
   G.density <- e / (((n*(n-1))/2))
@@ -344,6 +344,8 @@ BA_model <- function(G, iterations){
   BA.test <- e
   BA.G.diff <- c()
   BA.edges <- c()
+  
+  
   
   # Select nei/m input for BA model that yields closest match to number of edges of input graph
   for(i in 1:(nei+2)){
