@@ -328,11 +328,12 @@ BA_model <- function(G, iterations){
   #
   # Output: List containing three items:
   # 1) Random graph statistics and stdev in a df for transitivity and global efficiency
-  # 2) The average sorted degree distribution for all the WS graphs generated
-  # 3) The average sorted clustering distribution for all the WS graphs generated
+  # 2) A df containing all the degrees and clustering/transitivity over all the nodes, to be used
+  # to generate a histogram.
   #
-  #NOTE: BA graphs are attempted to be matched to total edge number of input graph
-  # also assumes undirected graph
+  # NOTE: BA graphs are generated such that the average edges from the BA graphs that are closest to
+  # the input graph is approximately equal to the input graph. The number of iterations used for each
+  # BA graph is scaled to generate this result.
   
   n <- vcount(G)
   e <- ecount(G)
@@ -341,41 +342,71 @@ BA_model <- function(G, iterations){
   
   nei.out <- 0
   BA.test <- e
+  BA.G.diff <- c()
+  BA.edges <- c()
   
   # Select nei/m input for BA model that yields closest match to number of edges of input graph
   for(i in 1:(nei+2)){
     BA.temp <- barabasi.game(n, m=i, directed=FALSE)
-    temp <- abs(e - ecount(BA.temp))
-    print(temp)
-    if(temp < BA.test){
-      nei.out <- i
-      BA.test <- temp
-    }
+    diff <- abs(e - ecount(BA.temp))
+    BA.edges <- append(BA.edges, ecount(BA.temp))
+    BA.G.diff <- append(BA.G.diff, diff) #track differences
   }
   
+  names(BA.G.diff) <- seq(1, length(BA.G.diff), 1) #give each diff a name corresponding to the nei
+  BA.G.diff <- sort(BA.G.diff, decreasing=FALSE) #Sort the diffs in ascending order
+                                                 #first 2 diffs and their name correspond to lowest neis.
+  names(BA.edges) <- seq(1, length(BA.G.diff), 1)
+  #Sort BA edges in same order as the differences
+  BA.edges <- BA.edges[(match(names(BA.G.diff), names(BA.edges)))] 
+
+  nei.1 <- strtoi(names(BA.G.diff)[1])
+  nei.2 <- strtoi(names(BA.G.diff)[2])
+  
+  BA.edge.1 <- BA.edges[1]
+  BA.edge.2 <- BA.edges[2]
+  
+  #Caclulate what fraction of iterations should use nei.1 and 2
+  BA.frac.1 <- abs((e - BA.edge.2) / (BA.edge.1 - BA.edge.2))
+  BA.frac.2 <- 1 - BA.frac.1
+  
+  #Choose ceiling of integers so err towards more rather than less iterations
+  iter.1 <- ceiling(BA.frac.1 * iterations)
+  iter.2 <- ceiling(BA.frac.2 * iterations)
+   
   TR <- c()     #Vector to hold transitivity calculations
   GE <- c()     #Vector to hold global efficiency calculations
-  deg.dist <- as.data.frame(matrix(NA, ncol=n, nrow=iterations))
-  clust.dist <- as.data.frame(matrix(NA, ncol=n, nrow=iterations))
+  deg.dist <- c()
+  clust.dist <- c()
+  BA.edges.total <- c()
   
-  #Generate many graphs
-  for(i in 1:iterations){
-    BA <- barabasi.game(n, m=nei.out, directed=FALSE)
+  #Generate graphs for nei.1
+  for(i in 1:iter.1){
+    BA <- barabasi.game(n, m=nei.1, directed=FALSE)
     TR <- append(TR, transitivity(BA, type="global"))
     GE <- append(GE, Global_efficiency(BA, weighted=FALSE))
     
-    deg.dist[i,] <- sort(degree(BA))
-    clust.dist[i,] <- sort(transitivity(BA, type="local"))
+    deg.dist <- c(deg.dist, degree(BA))
+    clust.dist <- c(clust.dist, transitivity(BA, type="local"))
+    BA.edges.total <- c(BA.edges.total, ecount(BA))
   }
   
-  deg.dist <- colMeans(deg.dist)
-  clust.dist <- colMeans(clust.dist)
+  #Generate graphs for nei.2
+  for(i in iter.1:(iter.1 + iter.2)){
+    BA <- barabasi.game(n, m=nei.2, directed=FALSE)
+    TR <- append(TR, transitivity(BA, type="global"))
+    GE <- append(GE, Global_efficiency(BA, weighted=FALSE))
+    
+    deg.dist <- c(deg.dist, degree(BA))
+    clust.dist <- c(clust.dist, transitivity(BA, type="local"))
+    BA.edges.total <- c(BA.edges.total, ecount(BA))
+  }
   
   TR_out <- c(mean(TR), sd(TR))
   GE_out <- c(mean(GE), sd(GE))
   df_out <- data.frame("Transitivity" = TR_out, "Global efficiency" = GE_out, row.names=c("Average", "stdev"))
-  
-  return (list(df_out, deg.dist, clust.dist))
+  df.distributions <- data.frame("Degrees" = deg.dist, "Clustering" = clust.dist, "Edges" = BA.edges.total)
+  return (list(df_out, df.distributions))
   
 }
 
