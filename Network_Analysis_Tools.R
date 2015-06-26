@@ -253,7 +253,7 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE){
                     row.names = c("Average", "stdev")))
 }
 
-Watts_Strogatz_model <- function(G, iterations=100, trans_match_iter=100){
+Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
   #Input: A graph to use as basis for generating Watts-Strogatz small 
   # world model. Number of random Watts-Strogatz graphs to calculate and
   #the number of iterations to use for matching transitivity/clustering
@@ -334,48 +334,17 @@ BA_model <- function(G, iterations){
   # NOTE: BA graphs are generated such that the average edges from the BA graphs that are closest to
   # the input graph is approximately equal to the input graph. The number of iterations used for each
   # BA graph is scaled to generate this result.
-  s
-  n <- vcount(G)
-  e <- ecount(G)
+  
+  n <- vcount(G) #nodes in input graph
+  e <- ecount(G) #edges in input graph
   G.density <- e / (((n*(n-1))/2))
-  nei <- round(e/n) #get approximate number for edges to add per iteration of BA algorithm (m)
   
   nei.out <- 0
   BA.test <- e
   BA.G.diff <- c()
   BA.edges <- c()
   
-  
-  
-  # Select nei/m input for BA model that yields closest match to number of edges of input graph
-  for(i in 1:(nei+2)){
-    BA.temp <- barabasi.game(n, m=i, directed=FALSE)
-    diff <- abs(e - ecount(BA.temp))
-    BA.edges <- append(BA.edges, ecount(BA.temp))
-    BA.G.diff <- append(BA.G.diff, diff) #track differences
-  }
-  
-  names(BA.G.diff) <- seq(1, length(BA.G.diff), 1) #give each diff a name corresponding to the nei
-  BA.G.diff <- sort(BA.G.diff, decreasing=FALSE) #Sort the diffs in ascending order
-                                                 #first 2 diffs and their name correspond to lowest neis.
-  names(BA.edges) <- seq(1, length(BA.G.diff), 1)
-  #Sort BA edges in same order as the differences
-  BA.edges <- BA.edges[(match(names(BA.G.diff), names(BA.edges)))] 
-
-  nei.1 <- strtoi(names(BA.G.diff)[1])
-  nei.2 <- strtoi(names(BA.G.diff)[2])
-  
-  BA.edge.1 <- BA.edges[1]
-  BA.edge.2 <- BA.edges[2]
-  
-  #Caclulate what fraction of iterations should use nei.1 and 2
-  BA.frac.1 <- abs((e - BA.edge.2) / (BA.edge.1 - BA.edge.2))
-  BA.frac.2 <- 1 - BA.frac.1
-  
-  #Choose ceiling of integers so err towards more rather than less iterations
-  iter.1 <- ceiling(BA.frac.1 * iterations)
-  iter.2 <- ceiling(BA.frac.2 * iterations)
-   
+    
   TR <- c()     #Vector to hold transitivity calculations
   GE <- c()     #Vector to hold global efficiency calculations
   deg.dist <- c()
@@ -383,19 +352,16 @@ BA_model <- function(G, iterations){
   BA.edges.total <- c()
   
   #Generate graphs for nei.1
-  for(i in 1:iter.1){
-    BA <- barabasi.game(n, m=nei.1, directed=FALSE)
-    TR <- append(TR, transitivity(BA, type="global"))
-    GE <- append(GE, Global_efficiency(BA, weighted=FALSE))
+  for(i in 1:iterations){
+    #Generate random sequence of numbers for feeding into the BA model 
+    BA.deg.seq <- runif(n, 0, max(degree(G)))
+    #Ensure number of edges to be added in BA model should be approximately the same 
+    #as in the input graph. By generating these randomly each time we add another element
+    #of randomization to the generation of the BA model.
+    BA.deg.seq <- round(e * (BA.deg.seq / sum(BA.deg.seq)))
+    BA.deg.seq <- sort(BA.deg.seq) #sort so low numbers added first and edges are unlikely to be omitted
     
-    deg.dist <- c(deg.dist, degree(BA))
-    clust.dist <- c(clust.dist, transitivity(BA, type="local"))
-    BA.edges.total <- c(BA.edges.total, ecount(BA))
-  }
-  
-  #Generate graphs for nei.2
-  for(i in iter.1:(iter.1 + iter.2)){
-    BA <- barabasi.game(n, m=nei.2, directed=FALSE)
+    BA <- barabasi.game(n, directed=FALSE, out.seq = BA.deg.seq)
     TR <- append(TR, transitivity(BA, type="global"))
     GE <- append(GE, Global_efficiency(BA, weighted=FALSE))
     
