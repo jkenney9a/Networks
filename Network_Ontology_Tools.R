@@ -13,6 +13,7 @@ load.xml <- function(filename){
   return(X)
 }
 
+
 xml.to.igraph <- function(xml.file){
   #
   #Turn a structured xml Allen Brain Atlas ontology file into an igraph graph
@@ -56,6 +57,7 @@ xml.to.igraph <- function(xml.file){
   return(G)  
 }
 
+
 get.coarse.ontology <- function(ontology.graph, nodes, coarseness){
   #
   # Input: Ontology graph, a vector of nodes (that should be in the ontology graph)
@@ -84,5 +86,37 @@ get.coarse.ontology <- function(ontology.graph, nodes, coarseness){
   
   return(node.mapping)
 }
+
+
+subset.and.neighbors <- function(ontology.graph, nodes, coarse.only = TRUE){
+  # Input: Ontology graph and a vector of nodes to subset 
+  # the ontology graph (as a vector). Can be full node names or acronyms.
+  #
+  # Output: Only the parts of the ontology graph that are connected to the input node
+  # names or acronyms.
+  
+  #Convert node full names/acronyms to node ids
+  #This allows function to be more general on what is used for node input
+  
+  O.G <- ontology.graph #Little easier to work with, even if more gangsta'
+  
+  #Consider figuring out how to make this more general in the future (JK)
+  node.out <- subset(V(O.G), V(O.G)$full.name %in% nodes | V(O.G)$name %in% nodes)
+  
+  ont.diameter <- diameter(O.G)
+  
+  #Get node ids for nodes in neighborhood
+  hood <- neighborhood(O.G, order=ont.diameter, nodes=node.out, mode='out')
+  if(coarse.only == FALSE){
+    hood <- append(hood, neighborhood(O.G, order=ont.diameter, nodes=node.out, mode='in'))
+  }
+  hood <- unique(unlist(hood)) #get set of all node ids to include in output the graph
+  
+  O.G.out <- induced.subgraph(O.G, vids=hood, impl="copy_and_delete")
+        
+  return(O.G.out)
+}
+
+
 
 
