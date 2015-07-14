@@ -1,10 +1,14 @@
 #
+#Tools for ontology analysis of networks using ABA brain ontologies
 #
+# NOTE: Important! Check how punctuation is brought in. Suggest retaining ABA punctuation
+# except for commas (depending on structure of data)
 #
 
 
 library(XML)
 library(igraph)
+
 
 
 load.xml <- function(filename){
@@ -14,9 +18,31 @@ load.xml <- function(filename){
 }
 
 
-xml.to.igraph <- function(xml.file){
+get.node.names <- function(filename){
+  #Useful for pulling out node names from a CSV file of cell counts
+  # for brain regions
+  
+  csv <- read.csv(filename, check.names=FALSE)
+  output <- colnames(csv)
+  output <- gsub('sums.', '', output)
+  
+  return(output)
+}
+
+
+simple.csv.to.vector <- function(filename){
+  #Bring in a CSV of strings as a vector (useful for ontology defining)
+  csv <- read.csv(filename, header=FALSE, stringsAsFactors=FALSE)
+  return(unname(unlist(csv)))
+  
+}
+
+xml.to.igraph <- function(xml.file, remove.commas = TRUE){
   #
   #Turn a structured xml Allen Brain Atlas ontology file into an igraph graph
+  # If remove.commas = TRUE, remove commas from full names of brain regions
+  # sometimes this is necessary depending on the eventual format of some of the
+  # comparison data
   #
   
   xml <- load.xml(xml.file)
@@ -35,6 +61,9 @@ xml.to.igraph <- function(xml.file){
   
   names <- unlist(xmlApply(names, xmlValue)) #Turn into a vector
   names <- gsub('\"', '', names) #Remove some XML formatting
+  if(remove.commas == TRUE){
+    names <- gsub(',', '', names)
+  }
   
   acronyms <- unlist(xmlApply(acronyms, xmlValue))
   acronyms <- gsub('\"', '', acronyms) #Remove some XML formatting
@@ -96,7 +125,7 @@ subset.and.neighbors <- function(ontology.graph, nodes, coarse.only = TRUE){
   # names or acronyms.
   
   #Convert node full names/acronyms to node ids
-  #This allows function to be more general on what is used for node input
+  #This allows function to be more general on what is used for node input; need to add this! (JK)
   
   O.G <- ontology.graph #Little easier to work with, even if more gangsta'
   
