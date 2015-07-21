@@ -85,6 +85,8 @@ corr_matrix <- function(df){
   #Change ... to -; for some reason when R imports "-" it turns it into "..."
   names(df_corr) <- gsub("...","-",colnames(df_corr), fixed=TRUE)
   rownames(df_corr) <- gsub("...", "-", rownames(df_corr), fixed=TRUE)
+  names(df_corr) <- gsub("sums.", "", colnames(df_corr), fixed=TRUE)
+  rownames(df_corr) <- gsub("sums.", "", rownames(df_corr), fixed=TRUE)
   
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
