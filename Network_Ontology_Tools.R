@@ -18,13 +18,17 @@ load.xml <- function(filename){
 }
 
 
-get.node.names <- function(filename){
+get.node.names <- function(filename, add.dots=FALSE){
   #Useful for pulling out node names from a CSV file of cell counts
   # for brain regions
   
   csv <- read.csv(filename, check.names=FALSE)
   output <- colnames(csv)
   output <- gsub('sums.', '', output)
+  
+  if(add.dots == TRUE){
+    output <- gsub(' ', '.', output)
+  }
   
   return(output)
 }
@@ -37,7 +41,7 @@ simple.csv.to.vector <- function(filename){
   
 }
 
-xml.to.igraph <- function(xml.file, remove.commas = TRUE){
+xml.to.igraph <- function(xml.file, remove.commas = TRUE, add.dots = FALSE){
   #
   #Turn a structured xml Allen Brain Atlas ontology file into an igraph graph
   # If remove.commas = TRUE, remove commas from full names of brain regions
@@ -63,6 +67,9 @@ xml.to.igraph <- function(xml.file, remove.commas = TRUE){
   names <- gsub('\"', '', names) #Remove some XML formatting
   if(remove.commas == TRUE){
     names <- gsub(',', '', names)
+  }
+  if(add.dots == TRUE){
+    names <- gsub(' ', '.', names) #Add dots to match typical R processing
   }
   
   acronyms <- unlist(xmlApply(acronyms, xmlValue))
