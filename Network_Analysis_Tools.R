@@ -16,7 +16,7 @@ load_data <- function(csv_file){
   #   
   #   Output: Dataframe containing CSV file
   
-  df <- read.csv(file=csv_file, header=TRUE)
+  df <- read.csv(file=csv_file, header=TRUE, check.names=FALSE)
   return(df)
 }
 
@@ -87,6 +87,8 @@ corr_matrix <- function(df){
   rownames(df_corr) <- gsub("...", "-", rownames(df_corr), fixed=TRUE)
   names(df_corr) <- gsub("sums.", "", colnames(df_corr), fixed=TRUE)
   rownames(df_corr) <- gsub("sums.", "", rownames(df_corr), fixed=TRUE)
+  
+  names(df_corr) <- rownames(df_corr)
   
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
