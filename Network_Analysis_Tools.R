@@ -80,7 +80,7 @@ corr_matrix <- function(df){
   df_corr <- as.data.frame(corr['r'])
   df_pvalue <- as.data.frame(corr['P'])
   
-  names(df_corr) <- gsub("r.","",colnames(df_corr), fixed=TRUE) #Remove ".r" from node names
+  names(df_corr) <- gsub("^r.","",colnames(df_corr), fixed=FALSE) #Remove "r." from node names
   
   #Change ... to -; for some reason when R imports "-" it turns it into "..."
   names(df_corr) <- gsub("...","-",colnames(df_corr), fixed=TRUE)
