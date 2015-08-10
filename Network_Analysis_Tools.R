@@ -159,9 +159,11 @@ get_centrality_measures <-function(G){
   # NOTE: nodal efficiency makes use of weights if they exist
   
   degree <- degree(G)
-  between <- betweenness(G, normalized=TRUE, weights=NULL)
+  G.pos <- G
+  E(G.pos)$weight <- abs(E(G.pos)) #Positive numbers are necessary for betweenness and closeness
+  between <- betweenness(G.pos, normalized=TRUE)
   eigenvector <- evcent(G)
-  close <- closeness(G)
+  close <- closeness(G.pos)
   trans <- transitivity(G,type="local")
   
   #Need to pull out matrices for efficiency calculations
