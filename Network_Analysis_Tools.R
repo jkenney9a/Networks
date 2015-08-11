@@ -165,7 +165,13 @@ get_centrality_measures <-function(G){
   # Degree, betweenness, eigenvector, closeness, 
   # transitivity (~clustering coefficient), nodal efficiency
   # NOTE: nodal efficiency makes use of weights if they exist
-  
+  if(ecount(G) == 0){
+    zeros <- rep(0, vcount(G))
+    return(data.frame("degree"=zeros, "betweenness"=zeros, 
+                      "eigenvector"=zeros, "closeness"=zeros,
+                      "efficiency"=zeros, "transitivity"=zeros))
+  }
+    
   degree <- degree(G)
   G.pos <- G
   E(G.pos)$weight <- abs(E(G.pos)) #Positive numbers are necessary for betweenness and closeness
