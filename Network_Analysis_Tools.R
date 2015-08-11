@@ -213,7 +213,7 @@ Global_efficiency <- function(G, weighted=TRUE){
   
   adj_mat <- as.matrix(get.adjacency(G))
   
-  if(weighted==TRUE){
+  if(weighted==TRUE & ecount(G) > 0){
     weight_mat <- abs(as.matrix(get.adjacency(G, attr='weight')))
     efficiency <- global.efficiency(adj_mat, weight_mat)
   } else{
