@@ -93,7 +93,7 @@ corr_matrix <- function(df){
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
 
-corr_matrix_threshold <- function(df, neg_Rs = FALSE, p_threshold=0.01){
+corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param='p'){
   #   Input: Dataframe with headers as titles (brain regions) of counts etc.
   #           p-value threshold, whether or not to keep negative correlations.
   #   
@@ -105,8 +105,15 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, p_threshold=0.01){
   df_corr <- dfs[['corr']]
   df_pvalue <- dfs[['pvalue']]
   
-  #apply p-value threshold to correlation matrix
-  df_corr[mapply(">=", df_pvalue, p_threshold)] <- 0
+  if(tolower(thresh.param)=='p'){
+    #apply p-value threshold to correlation matrix
+    df_corr[mapply(">=", df_pvalue, thresh)] <- 0    
+  } else if(tolower(thresh.param)=='r'){
+    df_corr[mapply("<=", abs(df_corr), thresh)] <- 0
+  } else{
+    print("Invalid thresholding paramter")
+  }
+ 
   
   #remove diagonals (may not be necessary when using igraph...)
   df_corr[mapply("==", df_corr, 1)] <- 0
@@ -123,13 +130,14 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, p_threshold=0.01){
   return(df_corr)
 }
 
-CSV_to_igraph <- function(CSV_file, negs = FALSE, p_thresh=0.01){
-  #Input: CSV_file of counts etc., p-value threshold
+CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01, thresh.param='p'){
+  #Input: CSV_file of counts etc., threshold, whether threshold based on p-value ('p')
+  # or correlation(r) value ('r')
   #
   #Output: igraph graph object
   
   df <- load_data(CSV_file)
-  df_G <- corr_matrix_threshold(df, neg_Rs = negs, p_threshold=p_thresh)
+  df_G <- corr_matrix_threshold(df, neg_Rs = negs, thresh=thresh, thresh.param=thresh.param)
   
   G <- graph.adjacency(as.matrix(df_G), mode="undirected",
                        weighted=TRUE)
@@ -137,13 +145,13 @@ CSV_to_igraph <- function(CSV_file, negs = FALSE, p_thresh=0.01){
   return(G)
 }
 
-df_to_igraph <- function(df, negs=FALSE, p_thresh=0.01){
+df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p'){
   #Input: df of counts per brain region, whether to keep negative
   #correlations and the p-value threshold
   #
   #Output: igraph graph
   
-  df_G <- corr_matrix_threshold(df, neg_Rs = negs, p_threshold=p_thresh)
+  df_G <- corr_matrix_threshold(df, neg_Rs = negs, thresh=thresh, thresh.param=thresh.param)
   G <- graph.adjacency(as.matrix(df_G), mode="undirected", 
                        weighted=TRUE)
   
