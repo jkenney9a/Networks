@@ -198,11 +198,15 @@ Global_efficiency <- function(G, weighted=TRUE){
   #Output: efficiency; 
   #NOTE: default uses weighted matrix and assumes 
   #the attribute is called "weight" in the graph.
+  #NOTE: The absolute value of edges is used as negative correlations
+  # result in odd behaviour. From a theoretical perspective I believe this is 
+  # ok b/c a neg. correlation tells us the same thing as a positive correlation
+  # with respect to the transfer of information across a network
   
   adj_mat <- as.matrix(get.adjacency(G))
   
   if(weighted==TRUE){
-    weight_mat <- as.matrix(get.adjacency(G, attr='weight'))
+    weight_mat <- abs(as.matrix(get.adjacency(G, attr='weight')))
     efficiency <- global.efficiency(adj_mat, weight_mat)
   } else{
     efficiency <- global.efficiency(adj_mat, adj_mat)
