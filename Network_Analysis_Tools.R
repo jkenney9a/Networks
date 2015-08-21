@@ -6,7 +6,6 @@
 # 
 
 library(igraph) #For network functions
-library(brainwaver) #For global efficiency calculation
 library(Hmisc) #For generating correlation/p-value matrices
 library(boot) #For bootstrapping
 
@@ -169,7 +168,8 @@ get_centrality_measures <-function(G){
     zeros <- rep(0, vcount(G))
     return(data.frame("degree"=zeros, "betweenness"=zeros, 
                       "eigenvector"=zeros, "closeness"=zeros,
-                      "efficiency"=zeros, "transitivity"=zeros))
+                      "efficiency"=zeros, "transitivity"=zeros,
+                      row.names=V(G)$name))
   }
     
   degree <- degree(G)
@@ -217,16 +217,17 @@ Global_efficiency <- function(G, weighted=TRUE){
   # ok b/c a neg. correlation tells us the same thing as a positive correlation
   # with respect to the transfer of information across a network
   
-  adj_mat <- as.matrix(get.adjacency(G))
-  
   if(weighted==TRUE & ecount(G) > 0){
-    weight_mat <- abs(as.matrix(get.adjacency(G, attr='weight')))
-    efficiency <- global.efficiency(adj_mat, weight_mat)
-  } else{
-    efficiency <- global.efficiency(adj_mat, adj_mat)
+    eff <- 1/shortest.paths(G)
+    eff[!is.finite(eff)] <- 0
+    gl.eff <- mean(eff[upper.tri(eff)])
+  }else{
+    eff <- 1/shortest.paths(G, weights=NA)
+    eff[!is.finite(eff)] <- 0
+    gl.eff <- mean(eff[upper.tri(eff)])
   }
-    
-  return(mean(efficiency[[1]]))
+  
+  return(gl.eff)
 }
 
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE){
