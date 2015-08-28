@@ -183,7 +183,7 @@ get_centrality_measures <-function(G){
   #Need to pull out matrices for efficiency calculations
   adj_mat <- as.matrix(get.adjacency(G))
   weight_mat <- as.matrix(get.adjacency(G, attr='weight'))
-  efficiency <- global.efficiency(adj_mat, weight_mat)
+  efficiency <- Global_efficiency(G)
   
   output <- data.frame("degree" = degree, "betweenness" = between, 
                        "eigenvector" = eigenvector[[1]], "closeness" = close,
@@ -217,7 +217,9 @@ Global_efficiency <- function(G, weighted=TRUE){
   # ok b/c a neg. correlation tells us the same thing as a positive correlation
   # with respect to the transfer of information across a network
   
+
   if(weighted==TRUE & ecount(G) > 0){
+    E(G)$weight <- abs(E(G)$weight)
     eff <- 1/shortest.paths(G)
     eff[!is.finite(eff)] <- 0
     gl.eff <- mean(eff[upper.tri(eff)])
