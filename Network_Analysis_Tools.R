@@ -181,13 +181,13 @@ get_centrality_measures <-function(G){
   trans <- transitivity(G,type="local")
   
   #Need to pull out matrices for efficiency calculations
-  adj_mat <- as.matrix(get.adjacency(G))
-  weight_mat <- as.matrix(get.adjacency(G, attr='weight'))
-  efficiency <- Global_efficiency(G)
+  #adj_mat <- as.matrix(get.adjacency(G))
+  #weight_mat <- as.matrix(get.adjacency(G, attr='weight'))
+  #efficiency <- Global_efficiency(G)
   
   output <- data.frame("degree" = degree, "betweenness" = between, 
                        "eigenvector" = eigenvector[[1]], "closeness" = close,
-                      "efficiency" = efficiency[[1]], "transitivity" = trans)
+                      "transitivity" = trans)
   
   return(output)
 }
