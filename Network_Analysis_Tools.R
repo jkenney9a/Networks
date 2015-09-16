@@ -164,11 +164,12 @@ get_centrality_measures <-function(G){
   # Degree, betweenness, eigenvector, closeness, 
   # transitivity (~clustering coefficient), nodal efficiency
   # NOTE: nodal efficiency makes use of weights if they exist
+  # but has been removed for now b/c of how long the calculation can take!
   if(ecount(G) == 0){
     zeros <- rep(0, vcount(G))
     return(data.frame("degree"=zeros, "betweenness"=zeros, 
                       "eigenvector"=zeros, "closeness"=zeros,
-                      "efficiency"=zeros, "transitivity"=zeros,
+                      "transitivity"=zeros,
                       row.names=V(G)$name))
   }
     
@@ -232,7 +233,7 @@ Global_efficiency <- function(G, weighted=TRUE){
   return(gl.eff)
 }
 
-Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE){
+Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE){
   #Input: igraph graph, wehther or not random graphs should have
   #same degree distribution as input graph. If degree_dist=FALSE
   #uses Erdos-Renyi random graph
@@ -276,7 +277,7 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE){
   GE_out <- c(mean(GE), sd(GE))
   
   return(data.frame("Transitivity" = TR_out, 
-                    "Global efficiency" = GE_out,
+                    "Global.efficiency" = GE_out,
                     row.names = c("Average", "stdev")))
 }
 
