@@ -157,7 +157,7 @@ df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p'){
   return(G)
 }
 
-get_centrality_measures <-function(G){
+get_centrality_measures <-function(G, weighted=FALSE){
   # Input: An igraph graph
   #
   # Output: A dataframe of centrality measures:
@@ -176,9 +176,17 @@ get_centrality_measures <-function(G){
   degree <- degree(G)
   G.pos <- G
   E(G.pos)$weight <- abs(E(G.pos)) #Positive numbers are necessary for betweenness and closeness
-  between <- betweenness(G.pos, normalized=TRUE)
-  eigenvector <- evcent(G)
-  close <- closeness(G.pos)
+  
+  if(weighted==FALSE){
+    eigenvector <- evcent(G, weights=NA)
+    between <- betweenness(G.pos, normalized=TRUE, weights=NA)
+    close <- closeness(G.pos, weights=NA, normalized=TRUE)
+  } else{
+      eigenvector <- evcent(G)
+      between <- betweenness(G.pos, normalized=TRUE, weights=NULL)
+      close <- closeness(G.pos)
+  }
+  
   trans <- transitivity(G,type="local")
   
   #Need to pull out matrices for efficiency calculations
@@ -406,9 +414,9 @@ BA_model <- function(G, iterations){
   
 }
 
-boot_function <- function(df, indices, p_thresh=0.01){
+boot_function <- function(df, indices, thresh=0.01){
   df_boot <- df[indices,]
-  df_thresh <- corr_matrix_threshold(df_boot, p_threshold=p_thresh, neg_Rs=FALSE)
+  df_thresh <- corr_matrix_threshold(df_boot, thresh=thresh, neg_Rs=FALSE, thresh.param='p')
   G <- graph.adjacency(as.matrix(df_thresh), mode="undirected",
                        weighted=TRUE)
   
@@ -427,7 +435,7 @@ bootstrap_measures <- function(df, iterations=500, thresh=0.01, conf_interval=0.
   #
   #Output: Bootstrap object
   
-  return(boot(data=df, statistic=boot_function, R=iterations, p_thresh=thresh))
+  return(boot(data=df, statistic=boot_function, R=iterations, thresh=thresh))
   
   
 }
