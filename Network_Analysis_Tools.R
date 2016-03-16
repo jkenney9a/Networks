@@ -157,7 +157,7 @@ df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p'){
   return(G)
 }
 
-get_centrality_measures <-function(G, weighted=FALSE){
+get_centrality_measures <-function(G, weighted=FALSE, normalized=FALSE){
   # Input: An igraph graph
   #
   # Output: A dataframe of centrality measures:
@@ -179,12 +179,12 @@ get_centrality_measures <-function(G, weighted=FALSE){
   
   if(weighted==FALSE){
     eigenvector <- evcent(G, weights=NA)
-    between <- betweenness(G.pos, normalized=TRUE, weights=NA)
-    close <- closeness(G.pos, weights=NA, normalized=TRUE)
+    between <- betweenness(G.pos, normalized=normalized, weights=NA)
+    close <- closeness(G.pos, weights=NA, normalized=normalized)
   } else{
       eigenvector <- evcent(G)
-      between <- betweenness(G.pos, normalized=TRUE, weights=NULL)
-      close <- closeness(G.pos)
+      between <- betweenness(G.pos, normalized=normalized, weights=NULL)
+      close <- closeness(G.pos, normalized=normalized)
   }
   
   trans <- transitivity(G,type="local")
@@ -225,10 +225,15 @@ Global_efficiency <- function(G, weighted=TRUE){
   # result in odd behaviour. From a theoretical perspective I believe this is 
   # ok b/c a neg. correlation tells us the same thing as a positive correlation
   # with respect to the transfer of information across a network
+  #
+  #NOTE (16/03/16): Altered calculation for weighted networks. We assume a 
+  # weighted correlation network. The way the shortest path-length algorithm works
+  # is that lower numbers = shorter distances. However, with correlations the 
+  # opposite is true. To correct for this, will take the inverse of the weights.
   
 
   if(weighted==TRUE & ecount(G) > 0){
-    E(G)$weight <- abs(E(G)$weight)
+    E(G)$weight <- 1 / abs(E(G)$weight)
     eff <- 1/shortest.paths(G)
     eff[!is.finite(eff)] <- 0
     gl.eff <- mean(eff[upper.tri(eff)])
