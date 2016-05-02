@@ -19,16 +19,19 @@ load_data <- function(csv_file){
   return(df)
 }
 
-clean_data <- function(df_count, missing_thresh=4, fill_missing=TRUE){
-  # Input: dataframe of counts to be cleaned, the maximum threshold
-  # of missing values allowed otherwise data is removed
+clean_data <- function(df_count, real_zeros=FALSE, missing_thresh=4, fill_missing=TRUE){
+  # Input: dataframe of counts to be cleaned, whether zeros are real data points of should be 
+  # purged, the maximum threshold of missing values allowed otherwise column is removed
+  # 
   #
   # Output: dataframe of counts with columns with more zeros than 
   # zero_threshold removed. Other zeros are replaced with column mean.
   
   #Replace zeros in data with NA to allow easier handling
-  df_count[mapply("==", df_count, 0)] <- NA
-  
+  if (real_zeros==FALSE){
+    df_count[mapply("==", df_count, 0)] <- NA
+  }
+    
   #Remove columns with more than missing_thresh missing values
   df_out <- df_count[,which(colSums(is.na(df_count)) < missing_thresh)]
     
@@ -71,7 +74,7 @@ normalize_data <- function(df_data, df_norm){
 corr_matrix <- function(df){
   #   Input: Dataframe with headers as titles (brain regions)
   #   
-  #   Output: Two dataframes corresponding to 1) all pairwise Pearson 
+  #   Output: List of two dataframes corresponding to 1) all pairwise Pearson 
   #   correlations and 2) all associated un-adjusted p-values
 
 
