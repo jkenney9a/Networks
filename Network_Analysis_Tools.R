@@ -176,7 +176,7 @@ get_centrality_measures <-function(G, weighted=FALSE, normalized=FALSE){
                       row.names=V(G)$name))
   }
     
-  degree <- degree(G)
+  degree <- degree(G, normalized=normalized)
   G.pos <- G
   E(G.pos)$weight <- abs(E(G.pos)) #Positive numbers are necessary for betweenness and closeness
   
