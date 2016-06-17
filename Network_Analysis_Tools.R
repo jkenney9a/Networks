@@ -420,7 +420,7 @@ BA_model <- function(G, iterations=1000){
   TR_out <- c(mean(TR), sd(TR))
   GE_out <- c(mean(GE), sd(GE))
   df_out <- data.frame("Transitivity" = TR_out, "Global efficiency" = GE_out, row.names=c("Average", "stdev"))
-  df.distributions <- data.frame("degree" = deg.dist, "Clustering" = clust.dist, "Edges" = BA.edges.total)
+  df.distributions <- data.frame("degree" = deg.dist, "transitivity" = clust.dist, "edges" = BA.edges.total)
   return (list(df_out, df.distributions))
   
 }
