@@ -307,6 +307,7 @@ Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
   # 1) Random graph statistics and stdev in a df for transitivity and global efficiency
   # 2) The average sorted degree distribution for all the WS graphs generated
   # 3) The average sorted clustering distribution for all the WS graphs generated
+  # 4) A dataframe containing all degree and transitivity values from every iteration
   #
   #NOTE: wiring probability for graph is set such that the clustering 
   #coefficient of the Watts-Strogatz graphs are approximately the same
@@ -365,7 +366,7 @@ Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
   
 }
 
-BA_model <- function(G, iterations){
+BA_model <- function(G, iterations=1000){
   #
   # Generate Barabasi-Alberts scale free models based on the input graph G
   #
@@ -419,7 +420,7 @@ BA_model <- function(G, iterations){
   TR_out <- c(mean(TR), sd(TR))
   GE_out <- c(mean(GE), sd(GE))
   df_out <- data.frame("Transitivity" = TR_out, "Global efficiency" = GE_out, row.names=c("Average", "stdev"))
-  df.distributions <- data.frame("Degrees" = deg.dist, "Clustering" = clust.dist, "Edges" = BA.edges.total)
+  df.distributions <- data.frame("degree" = deg.dist, "Clustering" = clust.dist, "Edges" = BA.edges.total)
   return (list(df_out, df.distributions))
   
 }
