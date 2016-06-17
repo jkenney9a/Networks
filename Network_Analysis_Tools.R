@@ -323,7 +323,7 @@ Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
   wiring.ps <- seq(0,1,0.01) #generate re-wiring probabilities to test
   
   #Data frame to hold transitivity/clustering values 
-  trans.out <- as.data.frame(matrix(NA, ncol=length(wiring.ps), nrow=iterations, 
+  trans.out <- as.data.frame(matrix(NA, ncol=length(wiring.ps), nrow=trans_match_iter, 
                                     dimnames=list(1:trans_match_iter, wiring.ps)))
   
   #Generate a series of Watts-Strogatz graphs to find out what p-value matches the 
@@ -352,6 +352,8 @@ Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
     clust.dist[i,] <- sort(transitivity(W, type="local"))
   }
   
+  df_all_out <- data.frame(degree = unlist(deg.dist), transitivity = unlist(clust.dist))
+  
   deg.dist <- colMeans(deg.dist)
   clust.dist <- colMeans(clust.dist)
   
@@ -359,7 +361,7 @@ Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
   GE_out <- c(mean(GE), sd(GE))
   df_out <- data.frame("Transitivity" = TR_out, "Global efficiency" = GE_out, row.names=c("Average", "stdev"))
 
-  return (list(df_out, deg.dist, clust.dist))
+  return (list(df_out, deg.dist, clust.dist, df_all_out))
   
 }
 
