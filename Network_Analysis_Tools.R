@@ -260,6 +260,7 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FAL
   
   TR <- c() #Transitivity
   GE <- c() #global efficiency (GE)
+  path_length <- c() #Path length
   
   if(degree_dist == TRUE){
     #Get rid of degree zero nodes b/c this causes issues with the
@@ -275,6 +276,7 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FAL
       TR <- append(TR, transitivity(RG, type="global"))
       #Add back in zero degree nodes to get efficiency of whole graph
       GE <- append(GE, Global_efficiency(RG + zero_d, weighted=FALSE))
+      path_length <- append(path_length, average.path.length(RG))
       } 
     } else{
   
@@ -285,15 +287,18 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FAL
       RG <- erdos.renyi.game(n, m, type="gnm")
       TR <- append(TR, transitivity(RG, type="global"))
       GE <- append(GE, Global_efficiency(RG, weighted=FALSE))
+      path_length <- append(path_length, average.path.length(RG))
       }
     }
   }
       
   TR_out <- c(mean(TR), sd(TR))
   GE_out <- c(mean(GE), sd(GE))
+  path_length_out <- c(mean(path_length), sd(path_length))
   
   return(data.frame("Transitivity" = TR_out, 
                     "Global.efficiency" = GE_out,
+                    "Path.length" = path_length_out,
                     row.names = c("Average", "stdev")))
 }
 
