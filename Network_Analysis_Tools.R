@@ -19,7 +19,7 @@ load_data <- function(csv_file){
   return(df)
 }
 
-clean_data <- function(df_count, real_zeros=FALSE, missing_thresh=4, fill_missing=TRUE){
+clean_data <- function(df_count, real_zeros=TRUE, missing_thresh=4, fill_missing=TRUE){
   # Input: dataframe of counts to be cleaned, whether zeros are real data points of should be 
   # purged, the maximum threshold of missing values allowed otherwise column is removed
   # 
