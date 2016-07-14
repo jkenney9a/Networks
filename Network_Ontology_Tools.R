@@ -41,7 +41,7 @@ simple.csv.to.vector <- function(filename){
   
 }
 
-xml.to.igraph <- function(xml.file, remove.commas = TRUE, add.dots = FALSE){
+xml.to.igraph <- function(xml.file, remove.commas = TRUE, add.dots = FALSE, add.underscore = TRUE){
   #
   #Turn a structured xml Allen Brain Atlas ontology file into an igraph graph
   # If remove.commas = TRUE, remove commas from full names of brain regions
@@ -65,11 +65,16 @@ xml.to.igraph <- function(xml.file, remove.commas = TRUE, add.dots = FALSE){
   
   names <- unlist(xmlApply(names, xmlValue)) #Turn into a vector
   names <- gsub('\"', '', names) #Remove some XML formatting
-  if(remove.commas == TRUE){
+  if(remove.commas == TRUE & add.underscore == FALSE){
     names <- gsub(',', '', names)
-  }
+    }else if(remove.commas == TRUE & add.underscore == TRUE){
+      names <- gsub(', ', '_', names)
+      names <- gsub(' ', '_', names)
+    }
+  
   if(add.dots == TRUE){
     names <- gsub(' ', '.', names) #Add dots to match typical R processing
+    names <- gsub('/', '.', names)
   }
   
   acronyms <- unlist(xmlApply(acronyms, xmlValue))
