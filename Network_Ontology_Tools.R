@@ -48,6 +48,10 @@ xml.to.igraph <- function(xml.file, remove.commas = TRUE, add.dots = FALSE, add.
   # sometimes this is necessary depending on the eventual format of some of the
   # comparison data
   #
+  # Returns a graph of the ontology file with the attributes of id, full.name and acronyms
+  # Also includes an ontology-level which refers to the distance the node is from the coarsest 
+  # ontology level (i.e, the 'root')
+  #
   
   xml <- load.xml(xml.file)
   
@@ -94,6 +98,10 @@ xml.to.igraph <- function(xml.file, remove.commas = TRUE, add.dots = FALSE, add.
   df.attributes <- data.frame(parent=acronyms, full.name=names, node.id=ids)
   
   G <- graph.data.frame(df.edge.list, vertices=df.attributes)
+  
+  #Get distance from 'root' for ontology level
+  m.distance <- shortest.paths(G, v='root', to=V(G), mode='in')
+  G <- set.vertex.attribute(G, 'ontology.level', value=m.distance)
   
   return(G)  
 }
