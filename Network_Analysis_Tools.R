@@ -249,6 +249,32 @@ Global_efficiency <- function(G, weighted=TRUE){
   return(gl.eff)
 }
 
+get_minimum_connectivity_threshold <- function(mat, densities=seq(0,0.5,0.01)){
+  #Generates a thresholded correlation/connectivity matrix in which all nodes have at 
+  #least one connection. 
+  #
+  #Input: A corrleation matrix, vector of densities to examine
+  #
+  #Output: a thresholded correlation matrix based on the above inidicated condition. 
+  
+  #Make sure we have a matrix (in case we get dataframe input)
+  mat <- as.matrix(mat)
+  diag(mat) <- 0
+  
+  densities <- sort(densities)
+  
+  for(cost in densities){
+    thresh <- quantile(abs(mat), probs=cost)
+    mat.test <- mat
+    mat.test[abs(mat) < thresh] <- 0
+    
+    if(all(colSums(mat.test) > 0)) break
+  }
+  
+  return(thresh)
+  
+}
+
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE){
   #Input: igraph graph, wehther or not random graphs should have
   #same degree distribution as input graph. If degree_dist=FALSE
