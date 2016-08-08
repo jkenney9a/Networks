@@ -232,7 +232,9 @@ Global_efficiency <- function(G, weighted=TRUE){
   #NOTE (16/03/16): Altered calculation for weighted networks. We assume a 
   # weighted correlation network. The way the shortest path-length algorithm works
   # is that lower numbers = shorter distances. However, with correlations the 
-  # opposite is true. To correct for this, will take the inverse of the weights.
+  # opposite is true. To correct for this, will take the inverse of the weights. This 
+  # works out to be the equivalent of taking the harmonic mean for the path length part
+  # of the calculation.
   
 
   if(weighted==TRUE & ecount(G) > 0){
@@ -249,7 +251,7 @@ Global_efficiency <- function(G, weighted=TRUE){
   return(gl.eff)
 }
 
-get_minimum_connectivity_threshold <- function(mat, densities=seq(0,0.5,0.01)){
+get_minimum_connectivity_threshold <- function(mat, densities=seq(1,0.25,-0.01)){
   #Generates a thresholded correlation/connectivity matrix in which all nodes have at 
   #least one connection. 
   #
@@ -261,14 +263,13 @@ get_minimum_connectivity_threshold <- function(mat, densities=seq(0,0.5,0.01)){
   mat <- as.matrix(mat)
   diag(mat) <- 0
   
-  densities <- sort(densities)
   
   for(cost in densities){
     thresh <- quantile(abs(mat), probs=cost)
     mat.test <- mat
     mat.test[abs(mat) < thresh] <- 0
     
-    if(all(colSums(mat.test) > 0)) break
+    if(all(colSums(abs(mat.test)) > 0)) break
   }
   
   return(thresh)
