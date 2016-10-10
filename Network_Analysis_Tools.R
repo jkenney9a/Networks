@@ -107,6 +107,18 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
   df_corr <- dfs[['corr']]
   df_pvalue <- dfs[['pvalue']]
   
+  #remove diagonals (may not be necessary when using igraph...)
+  diag(df_corr) <- 0
+  diag(df_pvalue) <- NA
+  #df_corr[mapply("==", df_corr, 1)] <- 0
+  
+  #remove any NaNs, infs or NAs (sometimes happens with bootstrapping; not sure why)
+  df_pvalue[mapply(is.infinite, df_corr)] <- 1
+  df_pvalue[mapply(is.nan, df_corr)] <- 1  
+  df_corr[mapply(is.infinite, df_corr)] <- 0
+  df_corr[mapply(is.nan, df_corr)] <- 0
+
+  
   if(tolower(thresh.param)=='p'){
     #apply p-value threshold to correlation matrix
     df_corr[mapply(">=", df_pvalue, thresh)] <- 0    
@@ -117,11 +129,7 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
   }
  
   
-  #remove diagonals (may not be necessary when using igraph...)
-  df_corr[mapply("==", df_corr, 1)] <- 0
   
-  #remove any NaNs, infs or NAs (sometimes happens with bootstrapping; not sure why)
-  df_corr[mapply(is.infinite, df_corr)] <- 0
   
   #remove negative correlations
   if (neg_Rs == FALSE){
@@ -176,7 +184,7 @@ get_centrality_measures <-function(G, weighted=FALSE, normalized=FALSE){
                       row.names=V(G)$name))
   }
     
-  degree <- degree(G, normalized=normalized)
+  degree <- igraph::degree(G, normalized=normalized)
   G.pos <- G
   E(G.pos)$weight <- abs(E(G.pos)) #Positive numbers are necessary for betweenness and closeness
   
@@ -292,14 +300,14 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FAL
   if(degree_dist == TRUE){
     #Get rid of degree zero nodes b/c this causes issues with the
     #generation of random graphs using the "vl" algorithm
-    G_1 <- delete.vertices(G, which(degree(G) == 0))
-    degrees <- degree(G_1)
+    G_1 <- delete.vertices(G, which(igraph::degree(G) == 0))
+    degrees <- igraph::degree(G_1)
     
     #Get number of zero degree nodes
-    zero_d <- length(degree(G)) - length(degrees)
+    zero_d <- length(igraph::degree(G)) - length(degrees)
     
     for(i in 1:iterations){
-      RG <- degree.sequence.game(degree(G_1), method='vl')
+      RG <- degree.sequence.game(igraph::degree(G_1), method='vl')
       TR <- append(TR, transitivity(RG, type="global"))
       #Add back in zero degree nodes to get efficiency of whole graph
       GE <- append(GE, Global_efficiency(RG + zero_d, weighted=FALSE))
@@ -381,7 +389,7 @@ Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
     TR <- append(TR, transitivity(W, type="global"))
     GE <- append(GE, Global_efficiency(W, weighted=FALSE))
     
-    deg.dist[i,] <- sort(degree(W))
+    deg.dist[i,] <- sort(igraph::degree(W))
     clust.dist[i,] <- sort(transitivity(W, type="local"))
   }
   
@@ -433,7 +441,7 @@ BA_model <- function(G, iterations=1000){
   #Generate graphs for nei.1
   for(i in 1:iterations){
     #Generate random sequence of numbers for feeding into the BA model 
-    BA.deg.seq <- runif(n, 0, max(degree(G)))
+    BA.deg.seq <- runif(n, 0, max(igraph::degree(G)))
     #Ensure number of edges to be added in BA model should be approximately the same 
     #as in the input graph. By generating these randomly each time we add another element
     #of randomization to the generation of the BA model.
@@ -444,7 +452,7 @@ BA_model <- function(G, iterations=1000){
     TR <- append(TR, transitivity(BA, type="global"))
     GE <- append(GE, Global_efficiency(BA, weighted=FALSE))
     
-    deg.dist <- c(deg.dist, degree(BA))
+    deg.dist <- c(deg.dist, igraph::degree(BA))
     clust.dist <- c(clust.dist, transitivity(BA, type="local"))
     BA.edges.total <- c(BA.edges.total, ecount(BA))
   }
@@ -482,38 +490,3 @@ bootstrap_measures <- function(df, iterations=500, thresh=0.01, conf_interval=0.
   
   
 }
-
-
-  
-  
-  
-  
-
-
-#   if(plots==TRUE){
-#     #Degree distribution plots:
-#     h.G.deg <- hist(degree(G), breaks=seq(from=min(degree(G))-0.5, to=max(degree(G))+0.5, by=1), plot=FALSE)
-#     h.G.deg$counts <- h.G.deg$counts/sum(h.G.deg$counts) #Recalculate as probability distribution
-#     
-#     h.WS.deg <- hist(deg.dist, breaks=seq(from=floor(min(deg.dist))-0.5, to=ceiling(max(deg.dist))+0.5, by=1), plot=FALSE)
-#     mx.h.WS.deg <- max(h.WS.deg$counts / sum(h.WS.deg$counts))
-#                       
-#     plot(h.G.deg, ylim=c(0,max(c(max(h.G.deg$counts, mx.h.WS.deg)))))
-#     d.deg.dist <- density(deg.dist, na.rm=TRUE, from=min(degree(G), to=max(degree(G))))
-#     d.deg.dist$y <- d.deg.dist$y / mx.h.WS.deg
-#     lines(d.deg.dist)
-#     
-#     #Clustering distribution plots:
-#     G.trans <- transitivity(G, type="local")
-#     h.G.clust <- hist(G.trans, breaks=seq(from=0, to=1, by=0.05), plot=FALSE)
-#     h.G.clust$counts <- h.G.clust$counts / sum(h.G.clust$counts)
-# 
-#     h.WS.clust <- hist(clust.dist, breaks=seq(from=0, to=1, by=0.05), plot=FALSE)
-#     mx.h.WS.clust <- max(h.WS.clust$counts / sum(h.WS.clust$counts))
-# 
-#     plot(h.G.clust, ylim=c(0,max(c(max(h.G.clust$counts, mx.h.WS.clust)))))
-#     d.clust.dist <- density(clust.dist, na.rm=TRUE, from=0, to=1)
-#     d.clust.dist$y <- d.clust.dist$y / max(h.WS.clust$counts)
-#     lines(d.clust.dist)
-# 
-#   }
