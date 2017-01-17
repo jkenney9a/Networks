@@ -127,9 +127,6 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
   } else{
     print("Invalid thresholding paramter")
   }
- 
-  
-  
   
   #remove negative correlations
   if (neg_Rs == FALSE){
@@ -390,7 +387,7 @@ Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
     GE <- append(GE, Global_efficiency(W, weighted=FALSE))
     
     deg.dist[i,] <- sort(igraph::degree(W))
-    clust.dist[i,] <- sort(transitivity(W, type="local"))
+    clust.dist[i,] <- sort(transitivity(W, type="local", isolates='zero'))
   }
   
   df_all_out <- data.frame(degree = unlist(deg.dist), transitivity = unlist(clust.dist))
