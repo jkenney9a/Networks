@@ -281,7 +281,7 @@ get_minimum_connectivity_threshold <- function(mat, densities=seq(1,0.25,-0.01))
   
 }
 
-rich.club.coeff(G, k, weighted=FALSE){
+rich.club.coeff <- function(G, k, weighted=FALSE){
   deg <- degree(G)
   deg <- sort(deg, index.return=TRUE)
   G.sub <- induced_subgraph(G, v=deg$ix[deg$x > k])
