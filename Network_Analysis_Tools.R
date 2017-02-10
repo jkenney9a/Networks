@@ -8,7 +8,6 @@
 library(igraph) #For network functions
 library(Hmisc) #For generating correlation/p-value matrices
 library(boot) #For bootstrapping
-library(brainGraph) #For rich club calculation
 library(data.table) #for rbindlist
 
 load_data <- function(csv_file){
@@ -282,6 +281,16 @@ get_minimum_connectivity_threshold <- function(mat, densities=seq(1,0.25,-0.01))
   
 }
 
+rich.club.coeff(G, k, weighted=FALSE){
+  deg <- degree(G)
+  deg <- sort(deg, index.return=TRUE)
+  G.sub <- induced_subgraph(G, v=deg$ix[deg$x > k])
+  phi <- (2*ecount(G.sub))/(vcount(G.sub) * (vcount(G.sub) - 1))
+  
+  return(list('phi'=phi, 'graph'=G.sub, 'Nk'=vcount(G.sub), 'Ek'=ecount(G.sub)))
+}
+
+
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE, rich_club=FALSE, rich_club_k=NULL,
                              rich_club_weighted=FALSE){
   #Input: igraph graph, wehther or not random graphs should have
@@ -351,9 +360,9 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FAL
   
   if(rich_club==TRUE){
     return(list('small.world'=df.out, 'rich.club'=phi))
+  } else {
+    return(df.out)
   }
-  
-  return(df.out)
 }
 
 Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
