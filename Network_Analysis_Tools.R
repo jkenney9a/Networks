@@ -8,7 +8,8 @@
 library(igraph) #For network functions
 library(Hmisc) #For generating correlation/p-value matrices
 library(boot) #For bootstrapping
-
+library(brainGraph) #For rich club calculation
+library(data.table) #for rbindlist
 
 load_data <- function(csv_file){
   #   Input: CSV file name
@@ -281,18 +282,26 @@ get_minimum_connectivity_threshold <- function(mat, densities=seq(1,0.25,-0.01))
   
 }
 
-Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE){
+Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE, rich_club=FALSE, rich_club_k=NULL,
+                             rich_club_weighted=FALSE){
   #Input: igraph graph, wehther or not random graphs should have
   #same degree distribution as input graph. If degree_dist=FALSE
-  #uses Erdos-Renyi random graph
+  #uses Erdos-Renyi random graph. If rich_club = TRUE, then you must supply a rich_club_k,
+  #which can be a single number or a range of numbers. Rich club analysis can only be done if the
+  #degree distribution = TRUE
   #
-  #Output: Equivalent random graph statistics and stdev in a df:
+  #Output: If no rich club analysis, then equivalent random graph statistics and stdev in a df:
   #Transitivity (very closely related to clustering coefficient)
   #Global efficiency
+  #
+  #If rich club analysis, then outputs a list where the first item is the dataframe containing the 
+  #info about the transitivity and global efficiency, and the second item is a dataframe of the average 
+  #rich club coefficient at each level of k provided
   
   TR <- c() #Transitivity
   GE <- c() #global efficiency (GE)
   path_length <- c() #Path length
+  phi <- list() #rich club coefficient
   
   if(degree_dist == TRUE){
     #Get rid of degree zero nodes b/c this causes issues with the
@@ -303,35 +312,48 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FAL
     #Get number of zero degree nodes
     zero_d <- length(igraph::degree(G)) - length(degrees)
     
-    for(i in 1:iterations){
-      RG <- degree.sequence.game(igraph::degree(G_1), method='vl')
-      TR <- append(TR, transitivity(RG, type="global"))
-      #Add back in zero degree nodes to get efficiency of whole graph
-      GE <- append(GE, Global_efficiency(RG + zero_d, weighted=FALSE))
-      path_length <- append(path_length, average.path.length(RG))
-      } 
+    l.RG <- lapply(c(1:iterations), function(x) degree.sequence.game(igraph::degree(G_1), method='vl'))
+    TR <- sapply(l.RG, transitivity, type='global')
+    GE <- sapply(l.RG, function(x) Global_efficiency(x + zero_d, weighted=FALSE)) #add back in zero deg. nodes
+    path_length <- sapply(l.RG, average.path.length)
+    phi <- lapply(l.RG, function(x) {lapply(rich_club_k, function(y) rich.club.coeff(x, k=y, weighted=rich_club_weighted)$phi)})
+    #process rich club stats
+    phi <- rbindlist(phi)
+    phi <- colMeans(phi) #get average for each iteration at each k value
+    names(phi) <- rich_club_k
+    
     } else{
   
   if(degree_dist == FALSE){
+    
+    if(rich_club == TRUE){
+      stop('cannot run rich club analysis if degree distribution is not degree distribution matched')
+    }
+    
     n <- vcount(G) #number of nodes
     m <- ecount(G) #number of edges
-    for(i in 1:iterations){
-      RG <- erdos.renyi.game(n, m, type="gnm")
-      TR <- append(TR, transitivity(RG, type="global"))
-      GE <- append(GE, Global_efficiency(RG, weighted=FALSE))
-      path_length <- append(path_length, average.path.length(RG))
-      }
+    
+    l.RG <- lapply(c(1:iterations), function(x) erdos.renyi.game(n, m, type='gnm'))
+    TR <- sapply(l.RG, transitivity, type='global')
+    GE <- sapply(l.RG, function(x) Global_efficiency(x, weighted=FALSE))
+    path_length <- sapply(l.RG, average.path.length)
+    
     }
-  }
-      
+    }
+  
   TR_out <- c(mean(TR), sd(TR))
   GE_out <- c(mean(GE), sd(GE))
   path_length_out <- c(mean(path_length), sd(path_length))
+  df.out <- data.frame("Transitivity" = TR_out, 
+                       "Global.efficiency" = GE_out,
+                       "Path.length" = path_length_out,
+                       row.names = c("Average", "stdev"))
   
-  return(data.frame("Transitivity" = TR_out, 
-                    "Global.efficiency" = GE_out,
-                    "Path.length" = path_length_out,
-                    row.names = c("Average", "stdev")))
+  if(rich_club==TRUE){
+    return(list('small.world'=df.out, 'rich.club'=phi))
+  }
+  
+  return(df.out)
 }
 
 Watts_Strogatz_model <- function(G, iterations=1000, trans_match_iter=100){
