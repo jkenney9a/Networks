@@ -293,10 +293,10 @@ rich.club.coeff <- function(G, k, weighted=FALSE){
 }
 
 participation.coeff <- function(G, Comm){
-  #Calculation the participation coefficient of all the nodes in a graph (G) given a specific
-  # igraph community structure (Comm). This code was taken largely from that in the brainGraph package
+  #Calculate the participation coefficient of all the nodes in a graph (G) given a specific
+  # igraph community structure (Comm). This code was taken largely from the brainGraph package
   
-  membership <- C$membership
+  membership <- Comm$membership
   deg <- degree(G)
   nodes <- which(deg > 0)
   part.coeffs <- rep(0, length(deg))
@@ -309,7 +309,28 @@ participation.coeff <- function(G, Comm){
   }
   
   return(part.coeffs)
+}
+
+within.module.deg.z.score <- function(G, Comm){
+  #Calculate the within module degree z scores for all the nodes in a graph (G) given a specific
+  # igraph community structure (Comm). This code was taken largely from the brainGraph package
   
+  membership <- Comm$membership
+  deg <- degree(G)
+  nodes <- which(deg > 0)
+  edges <- E(G)
+  z <- Ki <- rep(0, length(deg))
+   
+  for(n in nodes){
+    Ki[n] <- length(edges[n %--% which(membership == membership[n])])
+   }
+  
+  di <- lapply(seq_len(max(membership)), function(x) Ki[membership == x])
+  Ksi <- vapply(di, mean, FUN.VALUE=numeric(1))
+  sigKsi <- vapply(di, sd, numeric(1))
+  z[nodes] <- (Ki[nodes] - Ksi[membership[nodes]])/sigKsi[membership[nodes]]
+  z <- ifelse(!is.finite(z), 0, z)
+  return(z)
 }
 
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE, rich_club=FALSE, rich_club_k=NULL,
