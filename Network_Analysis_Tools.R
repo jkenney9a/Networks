@@ -282,6 +282,8 @@ get_minimum_connectivity_threshold <- function(mat, densities=seq(1,0.25,-0.01))
 }
 
 rich.club.coeff <- function(G, k, weighted=FALSE){
+  #Calculate the rich club coefficient for graph G given cut-off k
+  
   deg <- degree(G)
   deg <- sort(deg, index.return=TRUE)
   G.sub <- induced_subgraph(G, v=deg$ix[deg$x > k])
@@ -290,6 +292,25 @@ rich.club.coeff <- function(G, k, weighted=FALSE){
   return(list('phi'=phi, 'graph'=G.sub, 'Nk'=vcount(G.sub), 'Ek'=ecount(G.sub)))
 }
 
+participation.coeff <- function(G, Comm){
+  #Calculation the participation coefficient of all the nodes in a graph (G) given a specific
+  # igraph community structure (Comm). This code was taken largely from that in the brainGraph package
+  
+  membership <- C$membership
+  deg <- degree(G)
+  nodes <- which(deg > 0)
+  part.coeffs <- rep(0, length(deg))
+  
+  for(n in nodes){
+    Kis <- vapply(seq_len(max(membership)), function(x) sum(neighbors(G, n) %in% which(membership == x)),
+                  FUN.VALUE=integer(1))
+    Ki <- deg[n]
+    part.coeffs[n] <- 1 - sum((Kis/Ki)^2)
+  }
+  
+  return(part.coeffs)
+  
+}
 
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE, rich_club=FALSE, rich_club_k=NULL,
                              rich_club_weighted=FALSE){
