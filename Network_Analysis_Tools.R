@@ -83,6 +83,7 @@ corr_matrix <- function(df){
   df_pvalue <- as.data.frame(corr['P'])
   
   names(df_corr) <- gsub("^r.","",colnames(df_corr), fixed=FALSE) #Remove "r." from node names
+
   
   #Change ... to -; for some reason when R imports "-" it turns it into "..."
   names(df_corr) <- gsub("...","-",colnames(df_corr), fixed=TRUE)
@@ -245,13 +246,13 @@ Global_efficiency <- function(G, weighted=TRUE){
   if(weighted==TRUE & ecount(G) > 0){
     E(G)$weight <- 1 / abs(E(G)$weight)
     eff <- 1/shortest.paths(G)
-    eff[!is.finite(eff)] <- 0
-    gl.eff <- mean(eff[upper.tri(eff)])
   }else{
     eff <- 1/shortest.paths(G, weights=NA)
-    eff[!is.finite(eff)] <- 0
-    gl.eff <- mean(eff[upper.tri(eff)])
   }
+  
+  eff[!is.finite(eff)] <- 0
+  gl.eff <- mean(eff[upper.tri(eff)])
+  
   
   return(gl.eff)
 }
@@ -331,6 +332,26 @@ within.module.deg.z.score <- function(G, Comm){
   z[nodes] <- (Ki[nodes] - Ksi[membership[nodes]])/sigKsi[membership[nodes]]
   z <- ifelse(!is.finite(z), 0, z)
   return(z)
+}
+
+Nodal_efficiency <- function(G, weighted=FALSE) {
+  #Input: igraph graph, and whether or not to consider weights in the efficiency calculation
+  
+  #Output: data frame of nodal efficiency (i.e, average inverse shortest path length from individual node to all other nodes)
+  
+  if(weighted == TRUE & ecount(G) > 0){
+    E(G)$weight <- 1 / abs(E(G)$weight) #Take inverse of weights b/c dealing with correlations
+    eff <- 1 / shortest.paths(G)
+  }else{
+    eff <- 1/shortest.paths(G, weights=NA)
+  }
+  
+  eff[!is.finite(eff)] <- 0
+  out <- colSums(eff) / (vcount(G) - 1)
+  
+  df.out <- data.frame(node=names(out), nodal.efficiency = out)
+  
+  return(df.out)
 }
 
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE, rich_club=FALSE, rich_club_k=NULL,
