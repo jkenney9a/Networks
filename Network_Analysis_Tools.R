@@ -166,7 +166,7 @@ df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p'){
   return(G)
 }
 
-get_centrality_measures <-function(G, weighted=FALSE, normalized=FALSE){
+get_centrality_measures <-function(G, weighted=FALSE, nodal_efficiency=FALSE, normalized=FALSE){
   # Input: An igraph graph
   #
   # Output: A dataframe of centrality measures:
@@ -198,6 +198,7 @@ get_centrality_measures <-function(G, weighted=FALSE, normalized=FALSE){
   
   trans <- transitivity(G,type="local")
   
+  
   #Need to pull out matrices for efficiency calculations
   #adj_mat <- as.matrix(get.adjacency(G))
   #weight_mat <- as.matrix(get.adjacency(G, attr='weight'))
@@ -206,6 +207,12 @@ get_centrality_measures <-function(G, weighted=FALSE, normalized=FALSE){
   output <- data.frame("degree" = degree, "betweenness" = between, 
                        "eigenvector" = eigenvector[[1]], "closeness" = close,
                       "transitivity" = trans)
+  
+  if(nodal_efficiency==TRUE){
+    node_efficiency <- Nodal_efficiency(G, normalized = normalized)
+    output$efficiency <- node_efficiency
+  }
+  
   
   return(output)
 }
@@ -334,8 +341,9 @@ within.module.deg.z.score <- function(G, Comm){
   return(z)
 }
 
-Nodal_efficiency <- function(G, weighted=FALSE) {
+Nodal_efficiency <- function(G, weighted=FALSE, normalized=FALSE) {
   #Input: igraph graph, and whether or not to consider weights in the efficiency calculation
+  # whether or not to normalize (where max value = 1)
   
   #Output: data frame of nodal efficiency (i.e, average inverse shortest path length from individual node to all other nodes)
   
@@ -349,9 +357,11 @@ Nodal_efficiency <- function(G, weighted=FALSE) {
   eff[!is.finite(eff)] <- 0
   out <- colSums(eff) / (vcount(G) - 1)
   
-  df.out <- data.frame(node=names(out), nodal.efficiency = out)
+  if(normalized == TRUE){
+    out <- out / max(out)
+  }
   
-  return(df.out)
+  return(out)
 }
 
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE, rich_club=FALSE, rich_club_k=NULL,
