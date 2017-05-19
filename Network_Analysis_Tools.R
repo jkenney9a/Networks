@@ -71,8 +71,11 @@ normalize_data <- function(df_data, df_norm){
 }
 
 
-corr_matrix <- function(df){
+corr_matrix <- function(df, p.adjust.method='none'){
   #   Input: Dataframe with headers as titles (brain regions)
+  #           Whether or not to apply a p-value adjustment method drawn from the 'p.adjust' function
+  #           (e.g, 'fdr', 'bonferroni' etc.). 
+  #           NOTE: assume undirected graph!
   #   
   #   Output: List of two dataframes corresponding to 1) all pairwise Pearson 
   #   correlations and 2) all associated un-adjusted p-values
@@ -80,7 +83,13 @@ corr_matrix <- function(df){
 
   corr <- rcorr(as.matrix(df), type='pearson')
   df_corr <- as.data.frame(corr['r'])
-  df_pvalue <- as.data.frame(corr['P'])
+  
+  #adjust p-values if necessary
+  adjusted.P <- corr[['P']]
+  adjusted.P[upper.tri(adjusted.P)] <- p.adjust(adjusted.P[upper.tri(adjusted.P)], method=p.adjust.method)
+  adjusted.P[lower.tri(adjusted.P)] <- NA
+  df_pvalue <- as.data.frame(adjusted.P)
+  
   
   names(df_corr) <- gsub("^r.","",colnames(df_corr), fixed=FALSE) #Remove "r." from node names
 
@@ -96,15 +105,16 @@ corr_matrix <- function(df){
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
 
-corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param='p'){
+corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none'){
   #   Input: Dataframe with headers as titles (brain regions) of counts etc.
   #           p-value threshold, whether or not to keep negative correlations.
+  #           and the p-value adjustment method if using p-value as threshold parameter.
   #   
-  #   Output: Dataframe of correlations thresholded at p < alpha
+  #   Output: Dataframe of correlations thresholded at p < threshold
   #   
   #   NOTE: Removes diagonals and negative correlations
   
-  dfs <- corr_matrix(df)
+  dfs <- corr_matrix(df, p.adjust.method=p.adjust.method)
   df_corr <- dfs[['corr']]
   df_pvalue <- dfs[['pvalue']]
   
@@ -116,6 +126,7 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
   #remove any NaNs, infs or NAs (sometimes happens with bootstrapping; not sure why)
   df_pvalue[mapply(is.infinite, df_corr)] <- 1
   df_pvalue[mapply(is.nan, df_corr)] <- 1  
+  df_pvalue[mapply(is.na, df_pvalue)] <- 1
   df_corr[mapply(is.infinite, df_corr)] <- 0
   df_corr[mapply(is.nan, df_corr)] <- 0
 
@@ -138,14 +149,14 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
   return(df_corr)
 }
 
-CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01, thresh.param='p'){
+CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none'){
   #Input: CSV_file of counts etc., threshold, whether threshold based on p-value ('p')
   # or correlation(r) value ('r')
   #
   #Output: igraph graph object
   
   df <- load_data(CSV_file)
-  df_G <- corr_matrix_threshold(df, neg_Rs = negs, thresh=thresh, thresh.param=thresh.param)
+  df_G <- corr_matrix_threshold(df, neg_Rs = negs, thresh=thresh, thresh.param=thresh.param, p.adjust.method=p.adjust.method)
   
   G <- graph.adjacency(as.matrix(df_G), mode="undirected",
                        weighted=TRUE)
@@ -153,13 +164,13 @@ CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01, thresh.param='p')
   return(G)
 }
 
-df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p'){
+df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none'){
   #Input: df of counts per brain region, whether to keep negative
   #correlations and the p-value threshold
   #
   #Output: igraph graph
   
-  df_G <- corr_matrix_threshold(df, neg_Rs = negs, thresh=thresh, thresh.param=thresh.param)
+  df_G <- corr_matrix_threshold(df, neg_Rs = negs, thresh=thresh, thresh.param=thresh.param, p.adjust.method=p.adjust.method)
   G <- graph.adjacency(as.matrix(df_G), mode="undirected", 
                        weighted=TRUE)
   
