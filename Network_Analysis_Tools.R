@@ -137,7 +137,7 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
   } else if(tolower(thresh.param)=='r'){
     df_corr[mapply("<=", abs(df_corr), thresh)] <- 0
   } else{
-    print("Invalid thresholding paramter")
+    print("Invalid thresholding parameter")
   }
   
   #remove negative correlations
@@ -177,7 +177,7 @@ df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p', p.adjust
   return(G)
 }
 
-get_centrality_measures <-function(G, weighted=FALSE, nodal_efficiency=FALSE, normalized=FALSE){
+get_centrality_measures <-function(G, weighted=FALSE, nodal_efficiency=FALSE, normalized=FALSE, min_max_normalization=FALSE){
   # Input: An igraph graph
   #
   # Output: A dataframe of centrality measures:
@@ -222,6 +222,11 @@ get_centrality_measures <-function(G, weighted=FALSE, nodal_efficiency=FALSE, no
   if(nodal_efficiency==TRUE){
     node_efficiency <- Nodal_efficiency(G, normalized = normalized)
     output$efficiency <- node_efficiency
+  }
+  
+  if(min_max_normalization==TRUE){
+    output <- apply(output, MARGIN=2, function(x) {(x-min(x)) / (max(x) - min(x))})
+    output <- as.data.frame(output)
   }
   
   
