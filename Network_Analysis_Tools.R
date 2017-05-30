@@ -110,7 +110,7 @@ corr_matrix <- function(df, p.adjust.method='none', type='pearson'){
 corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none',
                                   type='pearson'){
   #   Input: Dataframe with headers as titles (brain regions) of counts etc.
-  #           p-value threshold, whether or not to keep negative correlations.
+  #           threshold and threshold parameter (p, r, or cost), whether or not to keep negative correlations.
   #           and the p-value adjustment method if using p-value as threshold parameter.
   #           and whether to use pearson or spearman correlation
   #   
@@ -133,22 +133,25 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
   df_pvalue[mapply(is.na, df_pvalue)] <- 1
   df_corr[mapply(is.infinite, df_corr)] <- 0
   df_corr[mapply(is.nan, df_corr)] <- 0
+  df_corr[mapply(is.na, df_corr)] <- 0
 
+  #remove negative correlations
+  if(neg_Rs == FALSE){
+    df_corr[mapply("<", df_corr, 0)] <- 0
+  }
   
   if(tolower(thresh.param)=='p'){
     #apply p-value threshold to correlation matrix
     df_corr[mapply(">=", df_pvalue, thresh)] <- 0    
   } else if(tolower(thresh.param)=='r'){
     df_corr[mapply("<=", abs(df_corr), thresh)] <- 0
+  } else if(tolower(thresh.param)=='cost'){
+    r.threshold <- quantile(abs(df_corr), probs=1-thresh, na.rm=TRUE)
+    print(r.threshold)
+    df_corr[mapply("<=", abs(df_corr), r.threshold)] <- 0
   } else{
-    print("Invalid thresholding parameter")
+    stop("Invalid thresholding parameter")
   }
-  
-  #remove negative correlations
-  if (neg_Rs == FALSE){
-    df_corr[mapply("<", df_corr, 0)] <- 0
-  }
-  
   
   return(df_corr)
 }
@@ -156,7 +159,7 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
 CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none',
                           type='pearson'){
   #Input: CSV_file of counts etc., threshold, whether threshold based on p-value ('p')
-  # or correlation(r) value ('r'). The p-value adjustment method to use (if any) and 
+  # or correlation(r) value ('r') or cost ('cost'). The p-value adjustment method to use (if any) and 
   # the type of correlation to perform (pearson or spearman)
   #
   #Output: igraph graph object
@@ -174,7 +177,7 @@ CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01, thresh.param='p',
 df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none',
                          type='pearson'){
   #Input: df of counts per brain region, whether to keep negative
-  #correlations and the p-value threshold, the p-value adjustment method to use (if any) and
+  #correlations and the threshold (r, p, or cost), the p-value adjustment method to use (if any) and
   # the type of correlation (pearson or spearman)
   #
   #Output: igraph graph
@@ -395,11 +398,14 @@ node.distance.comparison <- function(graph.list, method='jaccard'){
   #This function computes the distance between nodes of the given network based on their
   # connections
   
-  #Input: a list of graphs or adjacency matrices to compare nodes across, and the metric to use
+  #Input: a list of 2 graphs or adjacency matrices to compare nodes across, and the metric to use
   #
-  #Output: a dataframe with the 
+  #Output: a dataframe with the node and distance between nodes in the two dataframes
   if(!is.list(graph.list)){
     stop('Input must be in list form')
+  }
+  if(length(graph.list) != 2){
+    stop('Can only compare nodes between two graphs. More than two graphs have been given.')
   }
   
   if(is.igraph(graph.list[[1]])){
