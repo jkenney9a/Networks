@@ -9,6 +9,7 @@ library(igraph) #For network functions
 library(Hmisc) #For generating correlation/p-value matrices
 library(boot) #For bootstrapping
 library(data.table) #for rbindlist
+library(proxy) #For distance measures (e.g, Jaccard distance)
 
 load_data <- function(csv_file){
   #   Input: CSV file name
@@ -388,6 +389,33 @@ Nodal_efficiency <- function(G, weighted=FALSE, normalized=FALSE) {
   
   return(out)
 }
+
+
+node.distance.comparison <- function(graph.list, method='jaccard'){
+  #This function computes the distance between nodes of the given network based on their
+  # connections
+  
+  #Input: a list of graphs or adjacency matrices to compare nodes across, and the metric to use
+  #
+  #Output: a dataframe with the 
+  if(!is.list(graph.list)){
+    stop('Input must be in list form')
+  }
+  
+  if(is.igraph(graph.list[[1]])){
+    graph.list <- lapply(graph.list, get.adjacency, type='both', sparse=FALSE)
+  }
+  
+  #Make sure we have only 0's and 1's in matrix
+  graph.list <- lapply(graph.list, function(x) {x[x!=0] <- 1; x})
+  
+  df.distance <- dist(graph.list[[1]], graph.list[[2]], method = method, pairwise=TRUE)
+  df.distance <- data.frame(node = colnames(graph.list[[1]]), distance = as.numeric(df.distance))
+  
+  return(df.distance)
+}
+
+
 
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE, rich_club=FALSE, rich_club_k=NULL,
                              rich_club_weighted=FALSE){
