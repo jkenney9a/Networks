@@ -147,7 +147,6 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
     df_corr[mapply("<=", abs(df_corr), thresh)] <- 0
   } else if(tolower(thresh.param)=='cost'){
     r.threshold <- quantile(abs(df_corr), probs=1-thresh, na.rm=TRUE)
-    print(r.threshold)
     df_corr[mapply("<=", abs(df_corr), r.threshold)] <- 0
   } else{
     stop("Invalid thresholding parameter")
@@ -155,6 +154,7 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
   
   return(df_corr)
 }
+
 
 CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none',
                           type='pearson'){
