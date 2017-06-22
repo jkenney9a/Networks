@@ -107,7 +107,7 @@ corr_matrix <- function(df, p.adjust.method='none', type='pearson'){
   return(list("corr" = df_corr,"pvalue" = df_pvalue))
 }
 
-corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none',
+corr_matrix_threshold <- function(df, negs = FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none',
                                   type='pearson'){
   #   Input: Dataframe with headers as titles (brain regions) of counts etc.
   #           threshold and threshold parameter (p, r, or cost), whether or not to keep negative correlations.
@@ -136,7 +136,7 @@ corr_matrix_threshold <- function(df, neg_Rs = FALSE, thresh=0.01, thresh.param=
   df_corr[mapply(is.na, df_corr)] <- 0
 
   #remove negative correlations
-  if(neg_Rs == FALSE){
+  if(negs == FALSE){
     df_corr[mapply("<", df_corr, 0)] <- 0
   }
   
@@ -220,7 +220,7 @@ get_centrality_measures <-function(G, weighted=FALSE, nodal_efficiency=FALSE, no
       close <- closeness(G.pos, normalized=normalized)
   }
   
-  trans <- transitivity(G,type="local")
+  trans <- transitivity(G,type="local", isolates='zero')
   
   
   #Need to pull out matrices for efficiency calculations
@@ -240,6 +240,7 @@ get_centrality_measures <-function(G, weighted=FALSE, nodal_efficiency=FALSE, no
   if(min_max_normalization==TRUE){
     output <- apply(output, MARGIN=2, function(x) {(x-min(x)) / (max(x) - min(x))})
     output <- as.data.frame(output)
+    output$transitivity <- trans #Do not normalize transitivity b/c it is already normalized
   }
   
   
@@ -394,7 +395,7 @@ Nodal_efficiency <- function(G, weighted=FALSE, normalized=FALSE) {
 }
 
 
-node.distance.comparison <- function(graph.list, method='jaccard'){
+node.distance.comparison <- function(graph.list, method='jaccard', weighted=FALSE){
   #This function computes the distance between nodes of the given network based on their
   # connections
   
@@ -409,11 +410,12 @@ node.distance.comparison <- function(graph.list, method='jaccard'){
   }
   
   if(is.igraph(graph.list[[1]])){
-    graph.list <- lapply(graph.list, get.adjacency, type='both', sparse=FALSE)
+    if(weighted==TRUE){graph.list <- lapply(graph.list, get.adjacency, type='both', attr='weight', sparse=FALSE)}
+    else{graph.list <- lapply(graph.list, get.adjacency, type='both', sparse=FALSE)}
   }
   
   #Make sure we have only 0's and 1's in matrix
-  graph.list <- lapply(graph.list, function(x) {x[x!=0] <- 1; x})
+  if(weighted==FALSE){graph.list <- lapply(graph.list, function(x) {x[x!=0] <- 1; x})}
   
   df.distance <- dist(graph.list[[1]], graph.list[[2]], method = method, pairwise=TRUE)
   df.distance <- data.frame(node = colnames(graph.list[[1]]), distance = as.numeric(df.distance))
