@@ -10,6 +10,7 @@ library(Hmisc) #For generating correlation/p-value matrices
 library(boot) #For bootstrapping
 library(data.table) #for rbindlist
 library(proxy) #For distance measures (e.g, Jaccard distance)
+library(statGraph) #For Jensen-Shannon divergence between two graphs
 
 load_data <- function(csv_file){
   #   Input: CSV file name
@@ -165,7 +166,7 @@ CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01, thresh.param='p',
   #Output: igraph graph object
   
   df <- load_data(CSV_file)
-  df_G <- corr_matrix_threshold(df, neg_Rs = negs, thresh=thresh, thresh.param=thresh.param, 
+  df_G <- corr_matrix_threshold(df, negs = negs, thresh=thresh, thresh.param=thresh.param, 
                                 p.adjust.method=p.adjust.method, type=type)
   
   G <- graph.adjacency(as.matrix(df_G), mode="undirected",
@@ -182,7 +183,7 @@ df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p', p.adjust
   #
   #Output: igraph graph
   
-  df_G <- corr_matrix_threshold(df, neg_Rs = negs, thresh=thresh, thresh.param=thresh.param, 
+  df_G <- corr_matrix_threshold(df, negs = negs, thresh=thresh, thresh.param=thresh.param, 
                                 p.adjust.method=p.adjust.method, type=type)
   G <- graph.adjacency(as.matrix(df_G), mode="undirected", 
                        weighted=TRUE)
@@ -424,6 +425,83 @@ node.distance.comparison <- function(graph.list, method='jaccard', weighted=FALS
 }
 
 
+graph_measures_across_costs <- function(corr.mat, cost.list, thresh.param='cost', small.world=TRUE){
+  
+  diag(corr.mat) <- 0
+  corr.mat <- abs(corr.mat)
+  corr.mat[is.na(corr.mat)] <- 0
+  
+  if (thresh.param=='cost'){
+    l.cost.thresholds <- quantile(corr.mat[upper.tri(corr.mat)], probs=1-cost.list, na.rm = TRUE)
+  }else if (thresh.param=='r'){
+    l.cost.thresholds <- cost.list
+  } 
+  l.mat <- lapply(l.cost.thresholds, function(x) {corr.mat[corr.mat < x] <- 0; corr.mat})
+  l.G <- lapply(l.mat, function(x) {G <- graph.adjacency(as.matrix(x), mode='undirected', weighted = TRUE, diag=FALSE); G})
+  
+  l.GE <- as.numeric(lapply(l.G, Global_efficiency, weighted=FALSE))
+  l.trans <- as.numeric(lapply(l.G, transitivity, type='global'))
+  
+  
+  
+  #% nodes in connected componenet
+  l.GC.sizes <- lapply(l.G, GC_size)
+  l.GC.percent <- as.numeric(lapply(l.G, function(x) {(GC_size(x)/vcount(x)) * 100}))
+  
+  l.density <- unlist(lapply(l.G, graph.density))
+  
+  #Modularity using Louvian algorithm
+  l.G.comm <- lapply(l.G, cluster_louvain)
+  l.Q <- as.numeric(mapply(function(x,y) {modularity(x,y$membership)}, l.G, l.G.comm, SIMPLIFY=FALSE))
+  
+  df.out <- data.frame(density=l.density, GE = l.GE, clustering = l.trans, percent.connected = l.GC.percent, 
+                       modularity=l.Q, threshold=cost.list)
+  
+  #Small worldness calculations/comparisons to random graphs
+  if(small.world==TRUE){
+    l.rand.graphs <- lapply(l.G, Rand_graph_stats, weighted=FALSE)
+    l.lambda <- mapply(function(x,y) {y$Global.efficiency[1] / x}, l.GE, l.rand.graphs, SIMPLIFY=TRUE)
+    l.gamma <- mapply(function(x,y) {x / y$Transitivity[1]}, l.trans, l.rand.graphs, SIMPLIFY=TRUE)
+    l.sigma <- mapply(function(x,y) {x/y}, l.gamma, l.lambda, SIMPLIFY=TRUE)
+    df.out$lambda <- l.lambda
+    df.out$gamma <- l.gamma
+    df.out$sigma <- l.sigma
+  }
+  
+  return(df.out)
+}
+
+
+centrality_measures_across_costs <- function(corr.mat, cost.list, normalized=TRUE, thresh.param='cost'){
+  diag(corr.mat) <- 0
+  corr.mat <- abs(corr.mat)
+  corr.mat[is.na(corr.mat)] <- 0
+  
+  if (thresh.param=='cost'){
+    l.cost.thresholds <- quantile(corr.mat[upper.tri(corr.mat)], probs=1-cost.list, na.rm = TRUE)
+  }else if (thresh.param=='r'){
+    l.cost.thresholds <- cost.list
+  } 
+  
+  l.mat <- lapply(l.cost.thresholds, function(x) {corr.mat[corr.mat < x] <- 0; corr.mat})
+  l.G <- lapply(l.mat, function(x) {G <- graph.adjacency(as.matrix(x), mode='undirected', weighted = TRUE, diag=FALSE); G})
+  
+  l.G.comm <- lapply(l.G, cluster_louvain)
+  l.part.coef <- mapply(participation.coeff, l.G, l.G.comm, SIMPLIFY=FALSE)
+  l.within.mod.z.score <- mapply(within.module.deg.z.score, l.G, l.G.comm, SIMPLIFY=FALSE)
+  
+  l.centrality <- lapply(l.G, get_centrality_measures, nodal_efficiency=TRUE, normalized=FALSE, weighted=FALSE, min_max_normalization=TRUE)
+  l.centrality <- mapply(function(x,y) {x$participation.coefficient <- y; x}, l.centrality, l.part.coef, SIMPLIFY=FALSE)
+  l.centrality <- mapply(function(x,y) {x$within.module.z.score <- y; x}, l.centrality, l.within.mod.z.score, SIMPLIFY=FALSE)
+  l.centrality <- mapply(function(x,y) {x$threshold <- y; x}, l.centrality, cost.list, SIMPLIFY=FALSE)
+  l.centrality <- lapply(l.centrality, function(x) {x$region <- row.names(x) ; x})
+  df.centrality <- rbindlist(l.centrality)
+  
+  
+  
+  return(df.centrality)
+}
+
 
 Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FALSE, rich_club=FALSE, rich_club_k=NULL,
                              rich_club_weighted=FALSE){
@@ -625,6 +703,28 @@ BA_model <- function(G, iterations=1000){
   df.distributions <- data.frame("degree" = deg.dist, "transitivity" = clust.dist, "edges" = BA.edges.total)
   return (list(df_out, df.distributions))
   
+}
+
+get.JS <- function(x,y, bandwidth='Silverman'){
+  #Calculate the Jensen-Shannon divergence between two adjacency matrices. See 
+  # Takahashi et al, 2012, PLoS One
+  # Code more or less taken from the statGraph package but modified for use for 
+  # just a pair of matrices
+  #
+  #Input: adjacency matrices (x, y) and the badnwidth to use for the spectral
+  # estimation
+  #
+  #Output: a number (the Jensen-Shannon divergence)
+  #
+  #
+  adjacencyMatrices <- list(x, y)
+  f <- statGraph:::nSpectralDensities(adjacencyMatrices, bandwidth = bandwidth)
+  densities <- f$densities
+  x <- f$x
+  y1 <- densities[,1]
+  y2 <- densities[,2]
+  result <- statGraph:::JS(list(x = x, y = y1), list(x = x, y = y2))
+  return(result)
 }
 
 boot_function <- function(df, indices, thresh=0.01){
