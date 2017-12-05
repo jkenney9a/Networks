@@ -40,7 +40,7 @@ clean_data <- function(df_count, real_zeros=TRUE, missing_thresh=4, fill_missing
   if (fill_missing==TRUE){
     col_avgs <- colMeans(df_out, na.rm=TRUE)
     index <- which(is.na(df_out), arr.ind=TRUE)
-    df_out[index] <- col_avgs[index[,2]]
+    df_out[index] <- col_avgs[index[,2]] #this line gives an error if cleaned data has no underthreshold NAs to be filled
   }
   
   return(df_out)
@@ -246,6 +246,7 @@ get_centrality_measures <-function(G, weighted=FALSE, nodal_efficiency=FALSE, no
   degree <- igraph::degree(G, normalized=normalized)
   G.pos <- G
   E(G.pos)$weight <- abs(E(G.pos)) #Positive numbers are necessary for betweenness and closeness
+  E(G.pos)$weight <- 1-E(G.pos)$weight # betweenness and closeness in igraph are both based on distance matrices, no normal weight. Here distance= inverse of corr
   
   if(weighted==FALSE){
     eigenvector <- evcent(G, weights=NA)
