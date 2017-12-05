@@ -111,13 +111,13 @@ corr_matrix <- function(df, p.adjust.method='none', type='pearson'){
 corr_matrix_threshold <- function(df, negs = FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none',
                                   type='pearson'){
   #   Input: Dataframe with headers as titles (brain regions) of counts etc.
-  #           threshold and threshold parameter (p, r, or cost), whether or not to keep negative correlations.
+  #           threshold (can be a list of thresholds now) and threshold parameter (p, r, or cost), whether or not to keep negative correlations.
   #           and the p-value adjustment method if using p-value as threshold parameter.
   #           and whether to use pearson or spearman correlation
   #   
   #   Output: Dataframe of correlations thresholded at p < threshold
   #   
-  #   NOTE: Removes diagonals and negative correlations
+  #   NOTE: Removes diagonals
   
   dfs <- corr_matrix(df, p.adjust.method=p.adjust.method, type=type)
   df_corr <- dfs[['corr']]
@@ -143,19 +143,45 @@ corr_matrix_threshold <- function(df, negs = FALSE, thresh=0.01, thresh.param='p
   
   if(tolower(thresh.param)=='p'){
     #apply p-value threshold to correlation matrix
-    df_corr[mapply(">=", df_pvalue, thresh)] <- 0    
+    df_corr <- lapply(thresh, function(x) {df_corr[mapply(">=", df_pvalue, x)] <- 0; df_corr})    
   } else if(tolower(thresh.param)=='r'){
-    df_corr[mapply("<=", abs(df_corr), thresh)] <- 0
+    df_corr <- lapply(thresh, function(x) {df_corr[mapply("<=", abs(df_corr), x)] <- 0; df_corr})
   } else if(tolower(thresh.param)=='cost'){
     r.threshold <- quantile(abs(df_corr), probs=1-thresh, na.rm=TRUE)
-    df_corr[mapply("<=", abs(df_corr), r.threshold)] <- 0
+    df_corr <- lapply(r.threshold, function(x) {df_corr[mapply("<=", abs(df_corr), x)] <- 0; df_corr})
   } else{
     stop("Invalid thresholding parameter")
+  }
+  
+  if(length(thresh) == 1){
+    df_corr <- df_corr[[1]]
   }
   
   return(df_corr)
 }
 
+threshold_matrix <- function(corr.mat, p.value.mat=NULL, thresh, thresh.param){
+  #Input a correlation matrix, a p.value matrix (thresh param=p), a threshold, and a threshold parameter
+  # e.g, (r, p, or cost)
+  #
+  #Output: the correlation matrix thresholded as appropriate
+  
+  
+  
+  if(tolower(thresh.param)=='p'){
+    #apply p-value threshold to correlation matrix
+    corr.mat[mapply(">=", p.value.mat, thresh)] <- 0    
+  } else if(tolower(thresh.param)=='r'){
+    corr.mat[mapply("<=", abs(corr.mat), thresh)] <- 0
+  } else if(tolower(thresh.param)=='cost'){
+    r.threshold <- quantile(abs(corr.mat), probs=1-thresh, na.rm=TRUE)
+    corr.mat[mapply("<=", abs(corr.mat), r.threshold)] <- 0
+  } else{
+    stop("Invalid thresholding parameter")
+  }
+  
+  return(corr.mat)
+}
 
 CSV_to_igraph <- function(CSV_file, negs = FALSE, thresh=0.01, thresh.param='p', p.adjust.method='none',
                           type='pearson'){
@@ -185,8 +211,18 @@ df_to_igraph <- function(df, negs=FALSE, thresh=0.01, thresh.param='p', p.adjust
   
   df_G <- corr_matrix_threshold(df, negs = negs, thresh=thresh, thresh.param=thresh.param, 
                                 p.adjust.method=p.adjust.method, type=type)
-  G <- graph.adjacency(as.matrix(df_G), mode="undirected", 
-                       weighted=TRUE)
+  
+  #Handle case of single threshold
+  if(length(thresh) == 1){
+    df_G <- list(df_G)
+  }
+
+  G <- lapply(df_G, function(x) {graph.adjacency(as.matrix(x), mode="undirected", 
+                       weighted=TRUE, diag=FALSE)})
+  #Handle case of single threshold
+  if(length(thresh)==1){
+    G <- G[[1]]
+  }
   
   return(G)
 }
@@ -241,6 +277,7 @@ get_centrality_measures <-function(G, weighted=FALSE, nodal_efficiency=FALSE, no
   if(min_max_normalization==TRUE){
     output <- apply(output, MARGIN=2, function(x) {(x-min(x)) / (max(x) - min(x))})
     output <- as.data.frame(output)
+    output$degree.betweenness <- output$degree + output$betweenness
     output$transitivity <- trans #Do not normalize transitivity b/c it is already normalized
   }
   
@@ -425,18 +462,34 @@ node.distance.comparison <- function(graph.list, method='jaccard', weighted=FALS
 }
 
 
-graph_measures_across_costs <- function(corr.mat, cost.list, thresh.param='cost', small.world=TRUE){
+graph_measures_across_threshs <- function(df.counts, thresh.list, thresh.param='cost', negs=TRUE, small.world=TRUE,
+                                          small.world.iterations=100, p.adjust.method='none', rand.degree.dist=TRUE,
+                                          community=NA){
   
-  diag(corr.mat) <- 0
-  corr.mat <- abs(corr.mat)
-  corr.mat[is.na(corr.mat)] <- 0
+  #thresh.params = cost, r, or p
+  #Only need to supply p.value.mat is using thresh.param=p
   
-  if (thresh.param=='cost'){
-    l.cost.thresholds <- quantile(corr.mat[upper.tri(corr.mat)], probs=1-cost.list, na.rm = TRUE)
-  }else if (thresh.param=='r'){
-    l.cost.thresholds <- cost.list
-  } 
-  l.mat <- lapply(l.cost.thresholds, function(x) {corr.mat[corr.mat < x] <- 0; corr.mat})
+  # diag(corr.mat) <- 0
+  # corr.mat <- abs(corr.mat)
+  # corr.mat[is.na(corr.mat)] <- 0
+  # 
+  # 
+  # if (thresh.param=='cost'){
+  #   l.thresholds <- quantile(corr.mat[upper.tri(corr.mat)], probs=1-thresh.list, na.rm = TRUE)
+  # }else if (thresh.param=='r'){
+  #   l.thresholds <- thresh.list
+  # } 
+  # 
+  # if (thresh.param=='cost' | thresh.param=='r'){
+  #   l.mat <- lapply(l.thresholds, function(x) {corr.mat[corr.mat < x] <- 0; corr.mat})
+  # }else if (thresh.param=='p'){
+  #   l.mat <- lapply(thresh.list, function(x) {corr.mat[p.value.mat > x] <- 0; corr.mat})
+  #   l.r.thresh <- lapply(thresh.list, function(x) {min(corr.mat[p.value.mat > x] <- 0)})
+  # }
+  
+  l.mat <- corr_matrix_threshold(df.counts, negs=negs, thresh=thresh.list, thresh.param=thresh.param, p.adjust.method = p.adjust.method)
+  l.mat <- lapply(l.mat, abs)
+  
   l.G <- lapply(l.mat, function(x) {G <- graph.adjacency(as.matrix(x), mode='undirected', weighted = TRUE, diag=FALSE); G})
   
   l.GE <- as.numeric(lapply(l.G, Global_efficiency, weighted=FALSE))
@@ -451,15 +504,25 @@ graph_measures_across_costs <- function(corr.mat, cost.list, thresh.param='cost'
   l.density <- unlist(lapply(l.G, graph.density))
   
   #Modularity using Louvian algorithm
-  l.G.comm <- lapply(l.G, cluster_louvain)
-  l.Q <- as.numeric(mapply(function(x,y) {modularity(x,y$membership)}, l.G, l.G.comm, SIMPLIFY=FALSE))
-  
+  if(is.na(community)){
+    l.G.comm <- lapply(l.G, cluster_louvain)
+    l.Q <- as.numeric(mapply(function(x,y) {modularity(x,y$membership)}, l.G, l.G.comm, SIMPLIFY=FALSE))
+  } else {
+    l.Q <- as.numeric(lapply(l.G, function(x) {modularity(x, community$membership)}))
+  }
+    
   df.out <- data.frame(density=l.density, GE = l.GE, clustering = l.trans, percent.connected = l.GC.percent, 
-                       modularity=l.Q, threshold=cost.list)
+                       modularity=l.Q, threshold=thresh.list)
   
+  if (thresh.param == 'p'){
+    l.r.thresh <- lapply(l.mat, function(x) {min(x[x != 0])})
+    df.out$r.thresh <- l.r.thresh
+  }
   #Small worldness calculations/comparisons to random graphs
   if(small.world==TRUE){
-    l.rand.graphs <- lapply(l.G, Rand_graph_stats, weighted=FALSE)
+    #l.rand.graphs <- lapply(l.G, Rand_graph_stats, degree_dist=rand.degree.dist, weighted=FALSE, iterations=small.world.iterations)
+    l.rand.graphs <- lapply(l.G, function(x) {graph.density(x); out <- Rand_graph_stats(x, degree_dist=rand.degree.dist,
+                                                                                        weighted=FALSE, iterations=small.world.iterations); out})
     l.lambda <- mapply(function(x,y) {y$Global.efficiency[1] / x}, l.GE, l.rand.graphs, SIMPLIFY=TRUE)
     l.gamma <- mapply(function(x,y) {x / y$Transitivity[1]}, l.trans, l.rand.graphs, SIMPLIFY=TRUE)
     l.sigma <- mapply(function(x,y) {x/y}, l.gamma, l.lambda, SIMPLIFY=TRUE)
@@ -472,28 +535,42 @@ graph_measures_across_costs <- function(corr.mat, cost.list, thresh.param='cost'
 }
 
 
-centrality_measures_across_costs <- function(corr.mat, cost.list, normalized=TRUE, thresh.param='cost'){
-  diag(corr.mat) <- 0
-  corr.mat <- abs(corr.mat)
-  corr.mat[is.na(corr.mat)] <- 0
+centrality_measures_across_threshs <- function(df.counts, thresh.list, negs=TRUE, normalized=TRUE, thresh.param='cost', p.adjust.method='none',
+                                               weighted=FALSE, community=NA){
   
-  if (thresh.param=='cost'){
-    l.cost.thresholds <- quantile(corr.mat[upper.tri(corr.mat)], probs=1-cost.list, na.rm = TRUE)
-  }else if (thresh.param=='r'){
-    l.cost.thresholds <- cost.list
-  } 
+  l.mat <- corr_matrix_threshold(df.counts, negs=negs, thresh=thresh.list, thresh.param=thresh.param, p.adjust.method = p.adjust.method)
+  l.mat <- lapply(l.mat, abs)
   
-  l.mat <- lapply(l.cost.thresholds, function(x) {corr.mat[corr.mat < x] <- 0; corr.mat})
   l.G <- lapply(l.mat, function(x) {G <- graph.adjacency(as.matrix(x), mode='undirected', weighted = TRUE, diag=FALSE); G})
   
-  l.G.comm <- lapply(l.G, cluster_louvain)
-  l.part.coef <- mapply(participation.coeff, l.G, l.G.comm, SIMPLIFY=FALSE)
-  l.within.mod.z.score <- mapply(within.module.deg.z.score, l.G, l.G.comm, SIMPLIFY=FALSE)
   
-  l.centrality <- lapply(l.G, get_centrality_measures, nodal_efficiency=TRUE, normalized=FALSE, weighted=FALSE, min_max_normalization=TRUE)
+  
+  # diag(corr.mat) <- 0
+  # corr.mat <- abs(corr.mat)
+  # corr.mat[is.na(corr.mat)] <- 0
+  # 
+  # if (thresh.param=='cost'){
+  #   l.cost.thresholds <- quantile(corr.mat[upper.tri(corr.mat)], probs=1-cost.list, na.rm = TRUE)
+  # }else if (thresh.param=='r'){
+  #   l.cost.thresholds <- cost.list
+  # } 
+  # 
+  # l.mat <- lapply(l.cost.thresholds, function(x) {corr.mat[corr.mat < x] <- 0; corr.mat})
+  # l.G <- lapply(l.mat, function(x) {G <- graph.adjacency(as.matrix(x), mode='undirected', weighted = TRUE, diag=FALSE); G})
+  
+  if(is.na(community)){
+    l.G.comm <- lapply(l.G, cluster_louvain)
+    l.part.coef <- mapply(participation.coeff, l.G, l.G.comm, SIMPLIFY=FALSE)
+    l.within.mod.z.score <- mapply(within.module.deg.z.score, l.G, l.G.comm, SIMPLIFY=FALSE)
+  } else {
+    l.part.coef <- lapply(l.G, participation.coeff, community)
+    l.within.mod.z.score <- lapply(l.G, within.module.deg.z.score, community)
+  }
+  
+  l.centrality <- lapply(l.G, get_centrality_measures, nodal_efficiency=TRUE, normalized=normalized, weighted=weighted, min_max_normalization=TRUE)
   l.centrality <- mapply(function(x,y) {x$participation.coefficient <- y; x}, l.centrality, l.part.coef, SIMPLIFY=FALSE)
   l.centrality <- mapply(function(x,y) {x$within.module.z.score <- y; x}, l.centrality, l.within.mod.z.score, SIMPLIFY=FALSE)
-  l.centrality <- mapply(function(x,y) {x$threshold <- y; x}, l.centrality, cost.list, SIMPLIFY=FALSE)
+  l.centrality <- mapply(function(x,y) {x$threshold <- y; x}, l.centrality, thresh.list, SIMPLIFY=FALSE)
   l.centrality <- lapply(l.centrality, function(x) {x$region <- row.names(x) ; x})
   df.centrality <- rbindlist(l.centrality)
   
@@ -528,12 +605,13 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FAL
     #Get rid of degree zero nodes b/c this causes issues with the
     #generation of random graphs using the "vl" algorithm
     G_1 <- delete.vertices(G, which(igraph::degree(G) == 0))
+
     degrees <- igraph::degree(G_1)
     
     #Get number of zero degree nodes
     zero_d <- length(igraph::degree(G)) - length(degrees)
     
-    l.RG <- lapply(c(1:iterations), function(x) degree.sequence.game(igraph::degree(G_1), method='vl'))
+    l.RG <- lapply(c(1:iterations), function(x) tryCatch(degree.sequence.game(igraph::degree(G_1), method='vl'), error=function(cond) {return(graph.empty(0, directed=FALSE))}))
     TR <- sapply(l.RG, transitivity, type='global')
     GE <- sapply(l.RG, function(x) Global_efficiency(x + zero_d, weighted=FALSE)) #add back in zero deg. nodes
     path_length <- sapply(l.RG, average.path.length)
@@ -542,7 +620,6 @@ Rand_graph_stats <- function(G, iterations = 100, degree_dist=TRUE, weighted=FAL
     phi <- rbindlist(phi)
     phi <- colMeans(phi) #get average for each iteration at each k value
     names(phi) <- rich_club_k
-    
     } else{
   
   if(degree_dist == FALSE){
